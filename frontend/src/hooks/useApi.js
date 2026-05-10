@@ -1,0 +1,46 @@
+import axios from 'axios';
+
+export const api = axios;
+
+export const candidateAPI = {
+  getAll: (params) => axios.get('/api/candidates', { params }),
+  getOne: (id) => axios.get(`/api/candidates/${id}`),
+  create: (data) => axios.post('/api/candidates', data),
+  update: (id, data) => axios.put(`/api/candidates/${id}`, data),
+  updateStatus: (id, status) => axios.patch(`/api/candidates/${id}/status`, { status }),
+  delete: (id) => axios.delete(`/api/candidates/${id}`),
+};
+
+export const clientAPI = {
+  getAll: (params) => axios.get('/api/clients', { params }),
+  getOne: (id) => axios.get(`/api/clients/${id}`),
+  create: (data) => axios.post('/api/clients', data),
+  update: (id, data) => axios.put(`/api/clients/${id}`, data),
+  delete: (id) => axios.delete(`/api/clients/${id}`),
+};
+
+export const jobAPI = {
+  getAll: (params) => axios.get('/api/jobs', { params }),
+  getOne: (id) => axios.get(`/api/jobs/${id}`),
+  create: (data) => axios.post('/api/jobs', data),
+  update: (id, data) => axios.put(`/api/jobs/${id}`, data),
+  delete: (id) => axios.delete(`/api/jobs/${id}`),
+};
+
+export const interviewAPI = {
+  getAll: (params) => axios.get('/api/interviews', { params }),
+  create: (data) => axios.post('/api/interviews', data),
+  update: (id, data) => axios.put(`/api/interviews/${id}`, data),
+  delete: (id) => axios.delete(`/api/interviews/${id}`),
+};
+
+export const dashboardAPI = {
+  getStats: () => axios.get('/api/dashboard/stats'),
+};
+
+export const userAPI = {
+  getAll: () => axios.get('/api/users'),
+  create: (data) => axios.post('/api/users', data),
+  update: (id, data) => axios.put(`/api/users/${id}`, data),
+  delete: (id) => axios.delete(`/api/users/${id}`),
+};
