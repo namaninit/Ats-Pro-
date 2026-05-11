@@ -1,5 +1,8 @@
 import axios from 'axios';
 
+const baseURL = process.env.REACT_APP_API_URL || 'https://ats-pro-production-1aa0.up.railway.app';
+axios.defaults.baseURL = baseURL;
+
 export const api = axios;
 
 export const candidateAPI = {
