@@ -26,7 +26,10 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, planLimit('jobs'), async (req, res) => {
   try {
     const data = { ...req.body, companyId: req.companyId };
-    if (typeof data.requiredSkills === 'string') data.requiredSkills = data.requiredSkills.split(',').map(s => s.trim()).filter(Boolean);
+    if (typeof data.requiredSkills === 'string') 
+      data.requiredSkills = data.requiredSkills.split(',').map(s => s.trim()).filter(Boolean);
+    if (!data.deadline || data.deadline === '' || data.deadline === 'Invalid date') 
+      data.deadline = null;
     const j = await Job.create(data);
     res.status(201).json(j);
   } catch (err) { res.status(500).json({ message: err.message }); }
@@ -38,6 +41,8 @@ router.put('/:id', auth, async (req, res) => {
     if (!j) return res.status(404).json({ message: 'Not found' });
     const data = { ...req.body };
     if (typeof data.requiredSkills === 'string') data.requiredSkills = data.requiredSkills.split(',').map(s => s.trim()).filter(Boolean);
+    if (!data.deadline || data.deadline === '' || data.deadline === 'Invalid date') data.deadline = null;
+
     await j.update(data);
     res.json(j);
   } catch (err) { res.status(500).json({ message: err.message }); }
