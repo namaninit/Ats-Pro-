@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import { candidateAPI, jobAPI } from '../hooks/useApi';
+import { useNavigate } from 'react-router-dom';
 
 const STATUSES = ['new','screening','interview','offered','hired','rejected'];
 const SOURCES = ['LinkedIn','Naukri','Indeed','Referral','Walk-in','Resume Upload','Manual','Adzuna','Jooble'];
@@ -141,6 +142,7 @@ function QuickAddModal({ onClose, onSave, jobs }) {
 function CandidateRow({ c, jobs, selected, onSelect, onDelete, onStatusChange, onEdit }) {
   const [showMenu, setShowMenu] = useState(false);
   const job = jobs.find(j => j.id === c.jobId);
+  const navigate = useNavigate();
 
   return (
     <tr style={{ background: selected ? 'var(--accent-dim)' : undefined }}>
@@ -149,6 +151,10 @@ function CandidateRow({ c, jobs, selected, onSelect, onDelete, onStatusChange, o
           style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--accent)' }} />
       </td>
       <td>
+        <div style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer', color: 'var(--accent-light)' }} 
+  onClick={() => navigate(`/candidates/${c.id}`)}>
+  {c.name}
+</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div className="avatar" style={{ width: 36, height: 36, fontSize: 13, flexShrink: 0 }}>{c.name?.[0]}</div>
           <div>
@@ -212,6 +218,7 @@ function CandidateRow({ c, jobs, selected, onSelect, onDelete, onStatusChange, o
                 <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', fontSize: 13, padding: '8px 12px' }} onClick={() => { onDelete(c.id); setShowMenu(false); }}>
                   🗑️ Delete
                 </button>
+                
               </div>
             )}
           </div>
@@ -344,6 +351,26 @@ export default function Candidates() {
       load();
     } catch { toast.error('Bulk delete failed'); }
   };
+  const handleDeleteAll = async () => {
+  if (!window.confirm('WARNING: This will permanently delete ALL candidates from your company. This cannot be undone. Type "DELETE" to confirm.')) return;
+  const confirm2 = window.prompt('Type DELETE to confirm:');
+  if (confirm2 !== 'DELETE') return toast.error('Cancelled');
+  const toastId = toast.loading('Deleting all candidates...');
+  try {
+    let pageNum = 1;
+    let deleted = 0;
+    while (true) {
+      const r = await candidateAPI.getAll({ page: pageNum, limit: 100 });
+      const batch = r.data.candidates;
+      if (!batch.length) break;
+      await Promise.all(batch.map(c => candidateAPI.delete(c.id)));
+      deleted += batch.length;
+      if (r.data.pages <= pageNum) break;
+    }
+    toast.success(`${deleted} candidates deleted!`, { id: toastId });
+    load();
+  } catch { toast.error('Failed', { id: toastId }); }
+};
 
   const handleStatusChange = async (id, status) => {
     try { await candidateAPI.updateStatus(id, status); load(); toast.success(`Status → ${status}`); }
@@ -394,6 +421,10 @@ export default function Candidates() {
     />
       {/* Header */}
       <div className="page-header">
+
+        <button className="btn btn-danger" onClick={handleDeleteAll}>
+  🗑️ Delete All Candidates
+</button>
         <div>
           <h2 className="page-title">Candidates</h2>
           <p className="page-subtitle">{total} total candidates</p>
@@ -403,6 +434,9 @@ export default function Candidates() {
             <button className="btn btn-danger" onClick={handleBulkDelete}>
               🗑️ Delete ({selected.length})
             </button>
+            
+
+            
           )}
           <div style={{ position: 'relative' }}>
             <button className="btn btn-primary" onClick={() => setShowQuickMenu(!showQuickMenu)}>
@@ -475,7 +509,20 @@ export default function Candidates() {
           <span style={{ color: 'var(--accent-light)', fontWeight: 600 }}>{selected.length} selected</span>
           <button className="btn btn-secondary btn-sm" onClick={() => setSelected([])}>Deselect All</button>
           <button className="btn btn-danger btn-sm" onClick={handleBulkDelete}>🗑️ Delete Selected</button>
+        {/* <button className="btn btn-danger"
+  onClick={async () => {
+    if (!window.confirm('DELETE ALL candidates? This cannot be undone!')) return;
+    const toastId = toast.loading('Deleting all...');
+    try {
+      await Promise.all(candidates.map(c => candidateAPI.delete(c.id)));
+      toast.success('All deleted!', { id: toastId });
+      load();
+    } catch { toast.error('Failed', { id: toastId }); }
+  }}>
+  🗑️ Delete All
+</button> */}
         </div>
+        
       )}
 
       {/* Table */}

@@ -13,6 +13,7 @@ import Interviews from './pages/Interviews';
 import Users from './pages/Users';
 import ResumeScanner from './pages/ResumeScanner';
 import GmailImport from './pages/GmailImport';
+import CandidateProfile from './pages/CandidateProfile';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ const AppRoutes = () => {
         <Route path="resume-scanner" element={<ResumeScanner />} />
         <Route path="pipeline" element={<Pipeline />} />
         <Route path="gmail-import" element={<GmailImport />} />
+        <Route path="candidates/:id" element={<CandidateProfile />} />
         <Route path="interviews" element={<Interviews />} />
         <Route path="users" element={<PrivateRoute roles={['super_admin']}><Users /></PrivateRoute>} />
       </Route>

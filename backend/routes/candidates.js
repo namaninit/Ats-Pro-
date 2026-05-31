@@ -4,6 +4,8 @@ const path = require('path');
 const { Op } = require('sequelize');
 const { Candidate, Job, Client } = require('../models');
 const { auth, planLimit } = require('../middleware/auth');
+const { uploadResume } = require('../services/cloudinary');
+const fs = require('fs');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads/resumes')),
@@ -35,7 +37,8 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, planLimit('candidates'), upload.single('resume'), async (req, res) => {
   try {
     const data = { ...req.body, companyId: req.companyId };
-    if (req.file) data.resumePath = req.file.filename;
+      data.resumePath = await uploadResume(req.file.path, req.file.originalname);
+  fs.unlinkSync(req.file.path);
     if (typeof data.skills === 'string') data.skills = data.skills.split(',').map(s => s.trim()).filter(Boolean);
     const c = await Candidate.create(data);
     res.status(201).json(c);
@@ -47,7 +50,10 @@ router.put('/:id', auth, upload.single('resume'), async (req, res) => {
     const c = await Candidate.findOne({ where: { id: req.params.id, companyId: req.companyId } });
     if (!c) return res.status(404).json({ message: 'Not found' });
     const data = { ...req.body };
-    if (req.file) data.resumePath = req.file.filename;
+    if (req.file){
+      data.resumePath = await uploadResume(req.file.path, req.file.originalname);
+  fs.unlinkSync(req.file.path);
+    }
     if (typeof data.skills === 'string') data.skills = data.skills.split(',').map(s => s.trim()).filter(Boolean);
     await c.update(data);
     res.json(c);

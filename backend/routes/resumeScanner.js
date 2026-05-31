@@ -12,6 +12,7 @@ try {
 const Groq = require('groq-sdk');
 const { auth } = require('../middleware/auth');
 const { Job, Client, Candidate } = require('../models');
+const { uploadResume } = require('../services/cloudinary');
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads/resumes')),
@@ -253,7 +254,7 @@ Return ONLY valid JSON:
       expectedCTC: parseFloat(parsed.expectedCTC) || 0,
       noticePeriod: parseInt(parsed.noticePeriod) || 30,
       currentLocation: parsed.currentLocation || '',
-      resumePath: req.file.filename,
+resumePath: await uploadResume(req.file.path, req.file.originalname),
       status: 'new',
       source: 'Resume Upload',
       notes: `Auto-imported via Resume Scanner. Role: ${parsed.currentRole || 'N/A'}`,
