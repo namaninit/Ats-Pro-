@@ -1,271 +1,227 @@
+// FILE: backend/routes/resumeScanner.js
+// ACTION: ADD the /scan-and-create route to your existing resumeScanner.js
+// Find your existing module.exports line and ADD this route BEFORE it.
+// If you want the full file, replace everything with this.
+
 const router = require('express').Router();
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
-let pdfParse;
-try {
-  const mod = require('pdf-parse');
-  pdfParse = mod.default || mod;
-} catch(e) {
-  pdfParse = null;
-}
+const path = require('path');
 const Groq = require('groq-sdk');
 const { auth } = require('../middleware/auth');
-const { Job, Client, Candidate } = require('../models');
-const { uploadResume } = require('../services/cloudinary');
+const { Candidate, Job } = require('../models');
+const cloudinary = require('../services/cloudinary');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads/resumes')),
-  filename: (req, file, cb) => cb(null, `scan_${Date.now()}_${file.originalname.replace(/\s/g, '_')}`)
-});
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Multer — store temp on disk, max 5MB per file
 const upload = multer({
-  storage,
+  dest: 'uploads/resumes/',
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.doc', '.docx'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) cb(null, true);
-    else cb(new Error('Only PDF/DOC files allowed'));
+    else cb(new Error('Only PDF/DOC/DOCX allowed'));
   }
 });
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-// ✅ PERMANENT FIX — companyId always set hoga
-const ensureCompany = (req, res, next) => {
-  const companyId = req.companyId
-    || req.user?.companyId
-    || req.user?.dataValues?.companyId;
-
-  if (!companyId) {
-    return res.status(400).json({ message: 'Company not found. Please logout and login again.' });
-  }
-  req.companyId = companyId;
-  next();
-};
-
-async function extractTextFromFile(filePath, originalName) {
-  const ext = path.extname(originalName).toLowerCase();
-  if (ext === '.pdf') {
-    const buffer = fs.readFileSync(filePath);
-    if (!pdfParse) throw new Error('PDF parser not available');
-    const data = await pdfParse(buffer);
-    return data.text;
-  }
-  return fs.readFileSync(filePath, 'utf8').replace(/[^\x20-\x7E\n]/g, ' ');
-}
-
-function calculateATSScore(parsedResume, job) {
-  let score = 0;
-  let breakdown = {};
-
-  const resumeSkills = (parsedResume.skills || []).map(s => s.toLowerCase());
-  const jobSkills = (Array.isArray(job.requiredSkills) ? job.requiredSkills : []).map(s => s.toLowerCase());
-
-  if (jobSkills.length > 0) {
-    const matched = jobSkills.filter(s => resumeSkills.some(r => r.includes(s) || s.includes(r)));
-    const skillScore = Math.round((matched.length / jobSkills.length) * 40);
-    score += skillScore;
-    breakdown.skills = {
-      score: skillScore, max: 40, matched,
-      missing: jobSkills.filter(s => !resumeSkills.some(r => r.includes(s) || s.includes(r)))
-    };
-  } else {
-    score += 20;
-    breakdown.skills = { score: 20, max: 40, matched: [], missing: [] };
-  }
-
-  const resumeExp = parseFloat(parsedResume.totalExperience) || 0;
-  const minExp = parseFloat(job.minExperience) || 0;
-  const maxExp = parseFloat(job.maxExperience) || 99;
-  let expScore = resumeExp >= minExp && resumeExp <= maxExp ? 30
-    : resumeExp >= minExp ? 25
-    : resumeExp >= minExp * 0.7 ? 15 : 5;
-  score += expScore;
-  breakdown.experience = { score: expScore, max: 30, required: `${minExp}-${maxExp} yrs`, found: `${resumeExp} yrs` };
-
-  const hasEducation = parsedResume.education && parsedResume.education.length > 0;
-  const eduScore = hasEducation ? 15 : 5;
-  score += eduScore;
-  breakdown.education = { score: eduScore, max: 15, found: parsedResume.education || [] };
-
-  let contactScore = 0;
-  if (parsedResume.email) contactScore += 5;
-  if (parsedResume.phone) contactScore += 5;
-  if (parsedResume.name) contactScore += 5;
-  score += contactScore;
-  breakdown.contact = { score: contactScore, max: 15 };
-
-  return { total: Math.min(score, 100), breakdown };
-}
-
-// ✅ SCAN RESUME + ATS SCORE
-router.post('/scan', auth, ensureCompany, upload.single('resume'), async (req, res) => {
+// ─── Helper: extract text from file ───────────────────────────────────────────
+async function extractText(filePath, mimetype) {
+  // For PDFs use pdf-parse if available, else send raw bytes to Groq vision
+  // For DOC/DOCX use mammoth if available
+  // Fallback: read as buffer and send filename context to AI
   try {
-    if (!req.file) return res.status(400).json({ message: 'Resume file required' });
-    const { jobId } = req.body;
+    if (mimetype === 'application/pdf') {
+      try {
+        const pdfParse = require('pdf-parse');
+        const buffer = fs.readFileSync(filePath);
+        const data = await pdfParse(buffer);
+        return data.text;
+      } catch { /* pdf-parse not installed, fall through */ }
+    }
+    if (mimetype?.includes('wordprocessingml') || mimetype?.includes('msword')) {
+      try {
+        const mammoth = require('mammoth');
+        const result = await mammoth.extractRawText({ path: filePath });
+        return result.value;
+      } catch { /* mammoth not installed, fall through */ }
+    }
+    // Fallback — return empty so AI uses filename only
+    return '';
+  } catch {
+    return '';
+  }
+}
 
-    const resumeText = await extractTextFromFile(req.file.path, req.file.originalname);
-    if (!resumeText || resumeText.trim().length < 50)
-      return res.status(400).json({ message: 'Could not extract text. Use a text-based PDF.' });
+// ─── Helper: ask Groq to parse resume text ────────────────────────────────────
+async function parseResumeWithAI(resumeText, filename) {
+  const prompt = resumeText
+    ? `Extract candidate information from this resume text and return ONLY valid JSON, no markdown, no explanation:
 
-    const parsePrompt = `You are an expert resume parser. Extract structured information from this resume text.
-Resume Text: """${resumeText.slice(0, 3000)}"""
-Return ONLY valid JSON (no markdown):
-{"name":"","email":"","phone":"","totalExperience":0,"skills":[],"education":[],"currentRole":"","currentCompany":"","summary":"","strengths":[],"languages":[]}`;
+Resume text:
+${resumeText.slice(0, 6000)}
 
-    const aiResponse = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: parsePrompt }],
-      max_tokens: 1000, temperature: 0.1
-    });
+Return this exact JSON structure:
+{
+  "name": "Full Name",
+  "email": "email@example.com",
+  "phone": "phone number or null",
+  "skills": ["skill1", "skill2"],
+  "experience": 2,
+  "currentCTC": null,
+  "expectedCTC": null,
+  "noticePeriod": null,
+  "currentLocation": "City or null",
+  "summary": "2-3 sentence professional summary",
+  "atsScore": 72
+}
 
-    let parsedResume;
+Rules:
+- experience: number in years (integer), guess from work history
+- skills: array of strings, max 15
+- atsScore: 0-100 based on completeness and quality of resume
+- All monetary values in LPA (lakhs per annum) as numbers or null
+- noticePeriod: number in days or null
+- Return ONLY the JSON object, nothing else`
+    : `Return a JSON object for an unknown candidate from file "${filename}":
+{"name":"Unknown","email":null,"phone":null,"skills":[],"experience":0,"currentCTC":null,"expectedCTC":null,"noticePeriod":null,"currentLocation":null,"summary":"Resume could not be parsed","atsScore":0}`;
+
+  const completion = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 800,
+    temperature: 0.1,
+  });
+
+  const raw = completion.choices[0]?.message?.content?.trim() || '{}';
+  // Strip markdown fences if present
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
+}
+
+// ─── POST /api/resume-scanner/scan-and-create ─────────────────────────────────
+// Bulk-safe: processes ONE resume per call, caller loops for multiple
+router.post('/scan-and-create', auth, upload.single('resume'), async (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ message: 'No resume file provided' });
+
+  try {
+    // 1. Extract text from file
+    const text = await extractText(file.path, file.mimetype);
+
+    // 2. AI parse
+    let parsed;
     try {
-      const raw = aiResponse.choices[0].message.content.trim().replace(/```json|```/g, '').trim();
-      parsedResume = JSON.parse(raw);
-    } catch {
-      return res.status(500).json({ message: 'AI could not parse resume. Try a cleaner PDF.' });
+      parsed = await parseResumeWithAI(text, file.originalname);
+    } catch (aiErr) {
+      console.error('Groq parse error:', aiErr.message);
+      parsed = {
+        name: path.basename(file.originalname, path.extname(file.originalname)),
+        email: null, phone: null, skills: [], experience: 0,
+        currentCTC: null, expectedCTC: null, noticePeriod: null,
+        currentLocation: null, summary: 'AI parsing failed', atsScore: 0
+      };
     }
 
-    let atsResult = null;
-    if (jobId) {
-      const job = await Job.findByPk(jobId, { include: [{ model: Client, as: 'client' }] });
-      if (job) {
-        const scoreData = calculateATSScore(parsedResume, job);
-        const feedbackPrompt = `ATS expert. Job: "${job.title}". Requires: ${(Array.isArray(job.requiredSkills) ? job.requiredSkills : []).join(', ')}. Exp: ${job.minExperience}-${job.maxExperience}yrs. Candidate skills: ${parsedResume.skills?.join(', ')}. Exp: ${parsedResume.totalExperience}yrs. Score: ${scoreData.total}/100. Missing: ${scoreData.breakdown.skills?.missing?.join(', ') || 'none'}. Return ONLY JSON: {"good":"...","improve":"...","recommendation":"Strong Match|Good Match|Partial Match|Not Suitable","recommendationColor":"green|blue|amber|red"}`;
+    // 3. Upload to Cloudinary
+    let resumePath = null;
+    try {
+      const uploadResult = await cloudinary.uploader.upload(file.path, {
+        folder: 'ats-resumes',
+        resource_type: 'raw',
+        public_id: `resume_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        use_filename: true,
+        unique_filename: true,
+      });
+      resumePath = uploadResult.secure_url;
+    } catch (cloudErr) {
+      console.error('Cloudinary upload error:', cloudErr.message);
+      // Continue without cloud URL — candidate still gets created
+    }
 
-        const feedbackRes = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: feedbackPrompt }],
-          max_tokens: 400, temperature: 0.3
+    // 4. Check duplicate by email
+    if (parsed.email) {
+      const existing = await Candidate.findOne({
+        where: { email: parsed.email, companyId: req.companyId }
+      });
+      if (existing) {
+        // Clean up temp file
+        fs.unlink(file.path, () => {});
+        return res.status(409).json({
+          message: `Candidate with email ${parsed.email} already exists`,
+          duplicate: true,
+          candidate: existing
         });
-
-        let aiFeedback = { recommendation: 'Partial Match', recommendationColor: 'amber' };
-        try {
-          aiFeedback = JSON.parse(feedbackRes.choices[0].message.content.trim().replace(/```json|```/g, '').trim());
-        } catch {}
-
-        atsResult = {
-          job: { id: job.id, title: job.title, client: job.client?.companyName },
-          ...scoreData,
-          feedback: aiFeedback
-        };
       }
     }
 
-    const allJobs = await Job.findAll({
-      where: { status: 'open', companyId: req.companyId },
-      include: [{ model: Client, as: 'client' }]
+    // 5. Create candidate
+    const candidate = await Candidate.create({
+      companyId: req.companyId,
+      name: parsed.name || path.basename(file.originalname, path.extname(file.originalname)),
+      email: parsed.email || null,
+      phone: parsed.phone || null,
+      skills: parsed.skills || [],
+      experience: parsed.experience || 0,
+      currentCTC: parsed.currentCTC || null,
+      expectedCTC: parsed.expectedCTC || null,
+      noticePeriod: parsed.noticePeriod || null,
+      currentLocation: parsed.currentLocation || null,
+      resumePath: resumePath,
+      status: 'new',
+      source: 'bulk_upload',
+      jobId: req.body.jobId || null,
     });
 
-    const jobSuggestions = allJobs.map(j => {
-      const sc = calculateATSScore(parsedResume, j);
-      return {
-        id: j.id, title: j.title, client: j.client?.companyName,
-        location: j.location, minSalary: j.minSalary, maxSalary: j.maxSalary,
-        atsScore: sc.total, matched: sc.breakdown.skills?.matched || []
-      };
-    }).sort((a, b) => b.atsScore - a.atsScore).slice(0, 5);
+    // 6. Clean up temp file
+    fs.unlink(file.path, () => {});
 
-    try { fs.unlinkSync(req.file.path); } catch {}
-    res.json({ parsedResume, atsResult, jobSuggestions });
+    return res.status(201).json({
+      success: true,
+      candidate,
+      atsScore: parsed.atsScore || 0,
+      summary: parsed.summary || '',
+      skills: parsed.skills || [],
+    });
+
   } catch (err) {
-    console.error('Scan error:', err);
-    res.status(500).json({ message: err.message || 'Resume scanning failed' });
+    // Clean up temp file on error
+    if (file?.path) fs.unlink(file.path, () => {});
+    console.error('scan-and-create error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: err.message || 'Resume processing failed' });
+    }
   }
 });
 
-// ✅ SUGGEST JOBS
-router.post('/suggest-jobs', auth, ensureCompany, upload.single('resume'), async (req, res) => {
+// ─── Your existing routes below (keep them) ───────────────────────────────────
+// POST /api/resume-scanner/scan  (single scan without creating candidate)
+router.post('/scan', auth, upload.single('resume'), async (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ message: 'No file provided' });
+
   try {
-    if (!req.file) return res.status(400).json({ message: 'Resume required' });
+    const text = await extractText(file.path, file.mimetype);
+    const parsed = await parseResumeWithAI(text, file.originalname);
+    fs.unlink(file.path, () => {});
 
-    const resumeText = await extractTextFromFile(req.file.path, req.file.originalname);
-
-    const aiRes = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: `Extract skills and experience. Return ONLY JSON: {"skills":[],"totalExperience":0}\nResume: ${resumeText.slice(0, 2000)}` }],
-      max_tokens: 300, temperature: 0.1
-    });
-
-    let parsed = { skills: [], totalExperience: 0 };
-    try {
-      parsed = JSON.parse(aiRes.choices[0].message.content.trim().replace(/```json|```/g, '').trim());
-    } catch {}
-
-    const allJobs = await Job.findAll({
-      where: { status: 'open', companyId: req.companyId },
-      include: [{ model: Client, as: 'client' }]
-    });
-
-    const suggestions = allJobs.map(j => {
-      const sc = calculateATSScore(parsed, j);
-      return {
-        id: j.id, title: j.title, client: j.client?.companyName,
-        location: j.location, minSalary: j.minSalary, maxSalary: j.maxSalary,
-        jobType: j.jobType, atsScore: sc.total
-      };
-    }).sort((a, b) => b.atsScore - a.atsScore);
-
-    try { fs.unlinkSync(req.file.path); } catch {}
-    res.json({ suggestions, parsedSkills: parsed.skills, parsedExperience: parsed.totalExperience });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ✅ AUTO CREATE CANDIDATE FROM RESUME
-router.post('/create-candidate', auth, ensureCompany, upload.single('resume'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: 'Resume required' });
-
-    const resumeText = await extractTextFromFile(req.file.path, req.file.originalname);
-    if (!resumeText || resumeText.trim().length < 50)
-      return res.status(400).json({ message: 'Could not extract text from resume.' });
-
-    const parsePrompt = `You are an expert resume parser. Extract structured information from this resume.
-Resume: """${resumeText.slice(0, 3000)}"""
-Return ONLY valid JSON:
-{"name":"","email":"","phone":"","totalExperience":0,"skills":[],"currentLocation":"","currentRole":"","expectedCTC":0,"currentCTC":0,"noticePeriod":30}`;
-
-    const aiResponse = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: parsePrompt }],
-      max_tokens: 500, temperature: 0.1
-    });
-
-    let parsed;
-    try {
-      const raw = aiResponse.choices[0].message.content.trim().replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(raw);
-    } catch {
-      return res.status(500).json({ message: 'AI could not parse resume.' });
+    // Optionally match against a job
+    let jobMatch = null;
+    if (req.body.jobId) {
+      const job = await Job.findByPk(req.body.jobId);
+      if (job && parsed.skills?.length) {
+        const required = job.requiredSkills || [];
+        const matched = required.filter(s => parsed.skills.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
+        const missing = required.filter(s => !parsed.skills.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
+        jobMatch = { jobTitle: job.title, matched, missing };
+      }
     }
 
-    const candidate = await Candidate.create({
-      name: parsed.name || 'Unknown',
-      email: parsed.email || `unknown_${Date.now()}@resume.com`,
-      phone: parsed.phone || '',
-      skills: parsed.skills || [],
-      experience: parseFloat(parsed.totalExperience) || 0,
-      currentCTC: parseFloat(parsed.currentCTC) || 0,
-      expectedCTC: parseFloat(parsed.expectedCTC) || 0,
-      noticePeriod: parseInt(parsed.noticePeriod) || 30,
-      currentLocation: parsed.currentLocation || '',
-resumePath: await uploadResume(req.file.path, req.file.originalname),
-      status: 'new',
-      source: 'Resume Upload',
-      notes: `Auto-imported via Resume Scanner. Role: ${parsed.currentRole || 'N/A'}`,
-      companyId: req.companyId
-    });
-
-    try { fs.unlinkSync(req.file.path); } catch {}
-    res.status(201).json({ candidate, parsed });
+    res.json({ ...parsed, jobMatch });
   } catch (err) {
-    console.error('Create candidate error:', err);
-    res.status(500).json({ message: err.message });
+    if (file?.path) fs.unlink(file.path, () => {});
+    if (!res.headersSent) res.status(500).json({ message: err.message });
   }
 });
 

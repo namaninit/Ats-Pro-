@@ -10,14 +10,15 @@ const uploadResume = async (filePath, fileName) => {
   const result = await cloudinary.uploader.upload(filePath, {
     folder: 'ats-resumes',
     resource_type: 'raw',
-    public_id: `resume_${Date.now()}_${fileName}`,
-    use_filename: true,
+    public_id: `resume_${Date.now()}`,
+    format: 'pdf'
   });
-  return result.secure_url;
+  
+  // Convert to viewable URL
+  const viewableUrl = result.secure_url
+    .replace('/raw/upload/', '/raw/upload/fl_attachment:false/');
+  
+  return viewableUrl;
 };
 
-const deleteResume = async (publicId) => {
-  await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
-};
-
-module.exports = { uploadResume, deleteResume };
+module.exports = { uploadResume };

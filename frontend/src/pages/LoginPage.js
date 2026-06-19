@@ -161,10 +161,12 @@ export default function LoginPage() {
                 {errors.email && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.email}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  Password
-                  <span style={{ fontSize: 12, color: 'var(--accent-light)', cursor: 'pointer' }} onClick={() => toast('Forgot password — contact your admin')}>Forgot password?</span>
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  <label className="form-label">Password</label>
+  <a href="/forgot-password" style={{ fontSize: 12, color: 'var(--accent-light)' }}>
+    Forgot password?
+  </a>
+</div>
                 <div style={{ position: 'relative' }}>
                   <input className={`form-input ${errors.password ? 'input-error' : ''}`} type={showPass ? 'text' : 'password'} name="password" value={form.password} onChange={handle} placeholder="••••••••" style={{ paddingRight: 44 }} />
                   <button type="button" onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)' }}>
@@ -173,6 +175,7 @@ export default function LoginPage() {
                 </div>
                 {errors.password && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.password}</span>}
               </div>
+              
               <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: 15, marginTop: 8, borderRadius: 10 }} disabled={loading}>
                 {loading ? <><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> Signing in...</> : '→ Sign In'}
               </button>

@@ -3,7 +3,6 @@ const multer = require('multer');
 const path = require('path');
 const { Op } = require('sequelize');
 const { Candidate, Job, Client } = require('../models');
-const { auth, planLimit } = require('../middleware/auth');
 const { uploadResume } = require('../services/cloudinary');
 const fs = require('fs');
 
@@ -12,6 +11,38 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`)
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Change this line at top — add requireRole
+const { auth, planLimit, requireRole } = require('../middleware/auth');
+
+// Fix POST — guard against no file
+router.post('/', auth, planLimit('candidates'), upload.single('resume'), async (req, res) => {
+  try {
+    const data = { ...req.body, companyId: req.companyId };
+    if (req.file) {  // ← ADD THIS CHECK
+      data.resumePath = await uploadResume(req.file.path, req.file.originalname);
+      fs.unlinkSync(req.file.path);
+    }
+    if (typeof data.skills === 'string') data.skills = data.skills.split(',').map(s => s.trim()).filter(Boolean);
+    const c = await Candidate.create(data);
+    res.status(201).json(c);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Fix DELETE — only super_admin can delete
+router.delete('/:id', auth, requireRole('super_admin', 'master_admin'), async (req, res) => {
+  try {
+    const c = await Candidate.findOne({ where: { id: req.params.id, companyId: req.companyId } });
+    if (!c) return res.status(404).json({ message: 'Not found' });
+    await c.destroy();
+    res.json({ message: 'Deleted' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Fix Excel import — add planLimit
+// router.post('/import-excel', auth, planLimit('candidates'), multerExcel.single('excel'), async (req, res) => {
+ 
+// });
 
 router.get('/', auth, async (req, res) => {
   try {

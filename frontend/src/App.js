@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import Candidates from './pages/Candidates';
+import CandidateProfile from './pages/CandidateProfile';
 import Clients from './pages/Clients';
 import Jobs from './pages/Jobs';
 import Pipeline from './pages/Pipeline';
@@ -13,7 +14,12 @@ import Interviews from './pages/Interviews';
 import Users from './pages/Users';
 import ResumeScanner from './pages/ResumeScanner';
 import GmailImport from './pages/GmailImport';
-import CandidateProfile from './pages/CandidateProfile';
+import MasterLogin from './pages/MasterLogin';
+import MasterDashboard from './pages/MasterDashboard';
+import BulkResumeUpload from './pages/BulkResumeUpload';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -27,20 +33,68 @@ const AppRoutes = () => {
   const { user } = useAuth();
   return (
     <Routes>
+      {/* Master Admin — fully standalone */}
+      <Route path="/master" element={<MasterLogin />} />
+      <Route path="/master/dashboard" element={<MasterDashboard />} />
+
+      {/* Auth pages — no layout */}
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+
+      {/* Main ATS app */}
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="candidates" element={<Candidates />} />
-        <Route path="clients" element={<Clients />} />
+
+        <Route path="candidates" element={
+          <PrivateRoute roles={['super_admin', 'recruiter']}>
+            <Candidates />
+          </PrivateRoute>
+        } />
+        <Route path="candidates/:id" element={
+          <PrivateRoute roles={['super_admin', 'recruiter']}>
+            <CandidateProfile />
+          </PrivateRoute>
+        } />
+        <Route path="bulk-upload" element={
+          <PrivateRoute roles={['super_admin', 'recruiter']}>
+            <BulkResumeUpload />
+          </PrivateRoute>
+        } />
+        <Route path="pipeline" element={
+          <PrivateRoute roles={['super_admin', 'recruiter']}>
+            <Pipeline />
+          </PrivateRoute>
+        } />
         <Route path="jobs" element={<Jobs />} />
-        <Route path="resume-scanner" element={<ResumeScanner />} />
-        <Route path="pipeline" element={<Pipeline />} />
-        <Route path="gmail-import" element={<GmailImport />} />
-        <Route path="candidates/:id" element={<CandidateProfile />} />
-        <Route path="interviews" element={<Interviews />} />
-        <Route path="users" element={<PrivateRoute roles={['super_admin']}><Users /></PrivateRoute>} />
+        <Route path="clients" element={
+          <PrivateRoute roles={['super_admin']}>
+            <Clients />
+          </PrivateRoute>
+        } />
+        <Route path="interviews" element={
+          <PrivateRoute roles={['super_admin', 'recruiter']}>
+            <Interviews />
+          </PrivateRoute>
+        } />
+        <Route path="resume-scanner" element={
+          <PrivateRoute roles={['super_admin', 'recruiter']}>
+            <ResumeScanner />
+          </PrivateRoute>
+        } />
+        <Route path="gmail-import" element={
+          <PrivateRoute roles={['super_admin']}>
+            <GmailImport />
+          </PrivateRoute>
+        } />
+        <Route path="users" element={
+          <PrivateRoute roles={['super_admin']}>
+            <Users />
+          </PrivateRoute>
+        } />
       </Route>
+
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
@@ -48,18 +102,17 @@ const AppRoutes = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-        <Toaster
-          position="top-right"
-          toastOptions={{
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+          <Toaster position="top-right" toastOptions={{
             style: { background: '#1a2235', color: '#f1f5f9', border: '1px solid #1e293b' },
             success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
             error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } }
-          }}
-        />
-      </BrowserRouter>
-    </AuthProvider>
+          }} />
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

@@ -2,6 +2,18 @@ const router = require('express').Router();
 const { Op } = require('sequelize');
 const { Job, Client, Candidate } = require('../models');
 const { auth, planLimit } = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
+
+
+// Only super_admin can delete jobs
+router.delete('/:id', auth, requireRole('super_admin', 'master_admin'), async (req, res) => {
+  try {
+    const j = await Job.findOne({ where: { id: req.params.id, companyId: req.companyId } });
+    if (!j) return res.status(404).json({ message: 'Not found' });
+    await j.destroy();
+    res.json({ message: 'Deleted' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
 
 router.get('/', auth, async (req, res) => {
   try {
