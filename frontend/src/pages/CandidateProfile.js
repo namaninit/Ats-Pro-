@@ -3,13 +3,130 @@ import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { candidateAPI, jobAPI, interviewAPI } from "../hooks/useApi";
 import { format } from "date-fns";
+import { RATING_CONFIG } from "./Candidates";
+import ScoreGauge from '../components/ScoreGauge';
 
-const STATUSES = ["new", "screening", "interview", "offered", "hired", "rejected"];
-const STATUS_COLORS = {
-  new: "#3b82f6", screening: "#f59e0b", interview: "#8b5cf6",
-  offered: "#34d399", hired: "#10b981", rejected: "#ef4444",
-};
 
+// ── Job Assign Modal ──────────────────────────────────────────────────────────
+function JobAssignModal({ jobs, currentJobId, onClose, onSave }) {
+  const [jobId, setJobId] = useState(currentJobId || "");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await onSave(jobId || null);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <div className="modal-title">💼 Assign Job</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label">Select Job</label>
+            <select className="form-input form-select" value={jobId} onChange={(e) => setJobId(e.target.value)}>
+              <option value="">— No job assigned —</option>
+              {jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.title} {j.client?.companyName ? `· ${j.client.companyName}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Schedule Interview Modal ──────────────────────────────────────────────────
+function ScheduleInterviewModal({ candidateId, jobId, onClose, onSave }) {
+  const [form, setForm] = useState({
+  scheduledAt: "", mode: "video", round: 1, notes: ""
+});
+  const [saving, setSaving] = useState(false);
+  const handle = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+
+  const submit = async () => {
+    if (!form.scheduledAt) return toast.error("Pick a date & time");
+    setSaving(true);
+    try {
+      await interviewAPI.create({
+        candidateId,
+        jobId: jobId || null,
+        scheduledAt: form.scheduledAt,
+        mode: form.mode,
+        round: Number(form.round) || 1,
+        notes: form.notes,
+        status: "scheduled",
+      });
+      toast.success("Interview scheduled! Email sent to candidate.");
+      onSave();
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to schedule");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <div className="modal-header">
+          <div className="modal-title">📅 Schedule Interview</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Date & Time</label>
+              <input className="form-input" type="datetime-local" name="scheduledAt" value={form.scheduledAt} onChange={handle} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Round</label>
+              <input className="form-input" type="number" min="1" name="round" value={form.round} onChange={handle} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Mode</label>
+            <select className="form-input form-select" name="mode" value={form.mode} onChange={handle}>
+  <option value="video">📹 Video Call</option>
+  <option value="phone">📞 Phone Call</option>
+  <option value="in_person">🏢 In Person</option>
+</select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes (optional)</label>
+            <textarea className="form-input" rows={2} name="notes" value={form.notes} onChange={handle} placeholder="Interview link, address, instructions..." />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit} disabled={saving}>
+            {saving ? "Scheduling..." : "📅 Schedule & Notify"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function CandidateProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -17,11 +134,13 @@ export default function CandidateProfile() {
   const [jobs, setJobs] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState("resume");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -42,6 +161,11 @@ export default function CandidateProfile() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditClick = () => {
+    setActiveTab("details");
+    setEditing((prev) => !prev);
   };
 
   const saveEdit = async () => {
@@ -78,15 +202,39 @@ export default function CandidateProfile() {
     }
   };
 
+  const updateRating = async (rating) => {
+    try {
+      const fd = new FormData();
+      fd.append("scoreRating", rating);
+      await candidateAPI.update(id, fd);
+      setCandidate((p) => ({ ...p, scoreRating: rating }));
+      toast.success(`Rated: ${RATING_CONFIG[rating].label}`);
+    } catch {
+      toast.error("Failed to rate");
+    }
+  };
+
+  const updateJobAssignment = async (newJobId) => {
+    try {
+      const fd = new FormData();
+      fd.append("jobId", newJobId || "");
+      await candidateAPI.update(id, fd);
+      setCandidate((p) => ({ ...p, jobId: newJobId }));
+      toast.success(newJobId ? "Job assigned!" : "Job unassigned");
+    } catch {
+      toast.error("Failed to assign job");
+    }
+  };
+
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (!candidate) return <div className="empty-state"><h3>Candidate not found</h3></div>;
 
   const job = jobs.find((j) => j.id === candidate.jobId);
-  const sc = STATUS_COLORS[candidate.status] || "#64748b";
   const apiBase = process.env.REACT_APP_API_URL || "";
   const resumeUrl = candidate.resumePath?.startsWith("http")
     ? candidate.resumePath
     : `${apiBase}/uploads/resumes/${candidate.resumePath}`;
+  const upcomingInterviews = interviews.filter((i) => i.status === "scheduled");
 
   return (
     <div>
@@ -94,14 +242,13 @@ export default function CandidateProfile() {
         ← Back to Candidates
       </button>
 
-      {/* Profile Header */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 20 }}>
           <div style={{
             width: 80, height: 80, borderRadius: "50%",
-            background: `${sc}20`, border: `3px solid ${sc}40`,
+            background: "var(--accent-dim)", border: "3px solid var(--accent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 32, fontWeight: 700, color: sc, flexShrink: 0,
+            fontSize: 32, fontWeight: 700, color: "var(--accent-light)", flexShrink: 0,
           }}>
             {candidate.name?.[0]?.toUpperCase()}
           </div>
@@ -112,16 +259,8 @@ export default function CandidateProfile() {
               <span style={{ fontSize: 12, color: "var(--text-muted)", background: "var(--bg-elevated)", padding: "2px 8px", borderRadius: 4 }}>
                 #{candidate.id}
               </span>
-              {/* Static status badge — no dropdown */}
-              <span style={{
-                background: sc + "20", color: sc,
-                border: `1px solid ${sc}40`,
-                borderRadius: 20, padding: "4px 14px",
-                fontSize: 12, fontWeight: 600,
-              }}>
-                {candidate.status?.charAt(0).toUpperCase() + candidate.status?.slice(1)}
-              </span>
             </div>
+
 
             <div style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 8 }}>
               {candidate.currentRole || "No role specified"}
@@ -144,17 +283,22 @@ export default function CandidateProfile() {
               )}
             </div>
           </div>
-
+        
+  
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             {candidate.email && <a href={`mailto:${candidate.email}`} className="btn btn-secondary btn-sm">✉️ Email</a>}
             {candidate.phone && <a href={`tel:${candidate.phone}`} className="btn btn-secondary btn-sm">📞 Call</a>}
-            <button className="btn btn-primary btn-sm" onClick={() => setEditing(!editing)}>
+            <button className="btn btn-primary btn-sm" onClick={handleEditClick}>
               {editing ? "✕ Cancel" : "✏️ Edit"}
             </button>
           </div>
+          
+        </div>
+        {/* Score gauge — own full-width centered row */}
+        <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--border)", display: "flex", justifyContent: "center" }}>
+          <ScoreGauge rating={candidate.scoreRating} />
         </div>
 
-        {/* Stats row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
           {[
             { label: "Experience",    value: candidate.experience   ? `${candidate.experience} yrs`   : "—" },
@@ -168,22 +312,47 @@ export default function CandidateProfile() {
             </div>
           ))}
         </div>
+        
       </div>
 
-      {/* Main layout */}
+      
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
 
-        {/* LEFT — Tabs */}
         <div>
           <div className="tabs">
-            {["details", "interviews"].map((t) => (
+            {["resume", "details", "interviews"].map((t) => (
               <button key={t} className={`tab ${activeTab === t ? "active" : ""}`} onClick={() => setActiveTab(t)}>
-                {t === "details" ? "👤" : "📅"} {t.charAt(0).toUpperCase() + t.slice(1)}
+                {t === "resume" ? "📄" : t === "details" ? "👤" : "📅"} {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
           </div>
 
-          {/* DETAILS TAB */}
+          {activeTab === "resume" && (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              {candidate.resumePath ? (
+                <>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+                    <a href={resumeUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">👁️ Open in New Tab</a>
+                    <a href={resumeUrl} download target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">⬇️ Download</a>
+                  </div>
+                  <iframe
+                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(resumeUrl)}&embedded=true`}
+                    width="100%"
+                    height="650"
+                    style={{ border: "none", display: "block" }}
+                    title="Resume Preview"
+                  />
+                </>
+              ) : (
+                <div className="empty-state" style={{ padding: 60 }}>
+                  <div className="empty-state-icon">📄</div>
+                  <h3>No resume uploaded</h3>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === "details" && (
             <div className="card">
               {editing ? (
@@ -279,14 +448,22 @@ export default function CandidateProfile() {
             </div>
           )}
 
-          {/* INTERVIEWS TAB */}
           {activeTab === "interviews" && (
             <div className="card">
-              <div style={{ fontWeight: 600, marginBottom: 16 }}>📅 Interview History</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ fontWeight: 600 }}>📅 Interview History</div>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowInterviewModal(true)}>
+                  ➕ Schedule Interview
+                </button>
+              </div>
               {interviews.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-state-icon">📅</div>
                   <h3>No interviews yet</h3>
+                  <p style={{ marginBottom: 16 }}>Schedule the first interview for this candidate</p>
+                  <button className="btn btn-primary" onClick={() => setShowInterviewModal(true)}>
+                    📅 Schedule Interview
+                  </button>
                 </div>
               ) : interviews.map((i) => (
                 <div key={i.id} style={{ padding: 12, background: "var(--bg-elevated)", borderRadius: 8, marginBottom: 10 }}>
@@ -297,6 +474,7 @@ export default function CandidateProfile() {
                   <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                     {i.scheduledAt ? format(new Date(i.scheduledAt), "dd MMM yyyy, h:mm a") : "—"}
                   </div>
+                  {i.notes && <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6 }}>📝 {i.notes}</div>}
                   {i.feedback && <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6 }}>💬 {i.feedback}</div>}
                   {i.outcome && i.outcome !== "pending" && (
                     <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: i.outcome === "pass" ? "var(--green)" : i.outcome === "fail" ? "var(--red)" : "var(--amber)" }}>
@@ -309,31 +487,40 @@ export default function CandidateProfile() {
           )}
         </div>
 
-        {/* RIGHT — Sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
-          {/* Resume */}
           <div className="card">
-            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>📄 Resume</div>
-            {candidate.resumePath ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <a href={resumeUrl} target="_blank" rel="noreferrer"
-                  className="btn btn-secondary btn-sm" style={{ justifyContent: "center" }}>
-                  👁️ View Resume
-                </a>
-                <a href={resumeUrl} download target="_blank" rel="noreferrer"
-                  className="btn btn-primary btn-sm" style={{ justifyContent: "center" }}>
-                  ⬇️ Download Resume
-                </a>
-              </div>
-            ) : (
-              <p style={{ color: "var(--text-muted)", fontSize: 13 }}>No resume uploaded</p>
-            )}
+            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>🎯 Score Card</div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {Object.entries(RATING_CONFIG).map(([key, cfg]) => (
+                <label key={key} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+                  background: candidate.scoreRating === key ? cfg.color + "20" : "var(--bg-elevated)",
+                  border: `1px solid ${candidate.scoreRating === key ? cfg.color + "60" : "var(--border)"}`,
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={candidate.scoreRating === key}
+                    onChange={() => updateRating(key)}
+                    style={{ accentColor: cfg.color, width: 15, height: 15 }}
+                  />
+                  <span style={{ fontSize: 13, color: candidate.scoreRating === key ? cfg.color : "var(--text-secondary)", fontWeight: candidate.scoreRating === key ? 600 : 400 }}>
+                    {cfg.icon} {cfg.label}
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
 
-          {/* Job Assigned */}
           <div className="card">
-            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>💼 Jobs Assigned</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>💼 Job Assigned</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowJobModal(true)} style={{ padding: "2px 8px" }}>
+                {job ? "✏️ Change" : "➕ Assign"}
+              </button>
+            </div>
             {job ? (
               <div style={{ padding: 10, background: "var(--bg-elevated)", borderRadius: 8 }}>
                 <div style={{ fontWeight: 500, fontSize: 13 }}>{job.title}</div>
@@ -345,12 +532,16 @@ export default function CandidateProfile() {
             )}
           </div>
 
-          {/* Upcoming Interviews */}
           <div className="card">
-            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>📅 Upcoming Interviews</div>
-            {interviews.filter((i) => i.status === "scheduled").length === 0 ? (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>📅 Upcoming Interviews</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowInterviewModal(true)} style={{ padding: "2px 8px" }}>
+                ➕ Schedule
+              </button>
+            </div>
+            {upcomingInterviews.length === 0 ? (
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>No upcoming interviews</p>
-            ) : interviews.filter((i) => i.status === "scheduled").map((i) => (
+            ) : upcomingInterviews.map((i) => (
               <div key={i.id} style={{ padding: 8, background: "var(--bg-elevated)", borderRadius: 8, marginBottom: 8, fontSize: 13 }}>
                 <div style={{ fontWeight: 500 }}>Round {i.round}</div>
                 <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
@@ -360,7 +551,6 @@ export default function CandidateProfile() {
             ))}
           </div>
 
-          {/* Notes — replaces Source */}
           <div className="card">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>📝 Notes</div>
@@ -390,6 +580,23 @@ export default function CandidateProfile() {
 
         </div>
       </div>
+
+      {showJobModal && (
+        <JobAssignModal
+          jobs={jobs}
+          currentJobId={candidate.jobId}
+          onClose={() => setShowJobModal(false)}
+          onSave={updateJobAssignment}
+        />
+      )}
+      {showInterviewModal && (
+        <ScheduleInterviewModal
+          candidateId={candidate.id}
+          jobId={candidate.jobId}
+          onClose={() => setShowInterviewModal(false)}
+          onSave={load}
+        />
+      )}
     </div>
   );
 }

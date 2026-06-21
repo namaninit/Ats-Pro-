@@ -10,6 +10,7 @@ module.exports = (sequelize) => sequelize.define('Candidate', {
     get() { const v = this.getDataValue('skills'); try { return v ? JSON.parse(v) : []; } catch { return []; } },
     set(v) { this.setDataValue('skills', JSON.stringify(Array.isArray(v) ? v : [])); }
   },
+  scoreRating: { type: DataTypes.ENUM('blacklisted','poor','average','good','excellent'), allowNull: true },
   experience: { type: DataTypes.DECIMAL(4,1), defaultValue: 0 },
   currentCTC: { type: DataTypes.DECIMAL(10,2), allowNull: true },
   expectedCTC: { type: DataTypes.DECIMAL(10,2), allowNull: true },

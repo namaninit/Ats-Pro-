@@ -10,7 +10,7 @@ const path = require('path');
 const Groq = require('groq-sdk');
 const { auth } = require('../middleware/auth');
 const { Candidate, Job } = require('../models');
-const cloudinary = require('../services/cloudinary');
+const { uploadResume } = require('../services/cloudinary');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -109,6 +109,14 @@ router.post('/scan-and-create', auth, upload.single('resume'), async (req, res) 
   try {
     // 1. Extract text from file
     const text = await extractText(file.path, file.mimetype);
+    // TEMP DEBUG — remove after testing
+const stats = fs.statSync(file.path);
+console.log('📁 File path:', file.path);
+console.log('📁 File size on disk:', stats.size, 'bytes');
+console.log('📁 Multer reported size:', file.size, 'bytes');
+console.log('📁 Multer mimetype:', file.mimetype);
+console.log('📁 Extracted text length:', text.length);
+console.log('📁 Extracted text preview:', text.slice(0, 200));
 
     // 2. AI parse
     let parsed;
@@ -125,20 +133,12 @@ router.post('/scan-and-create', auth, upload.single('resume'), async (req, res) 
     }
 
     // 3. Upload to Cloudinary
-    let resumePath = null;
-    try {
-      const uploadResult = await cloudinary.uploader.upload(file.path, {
-        folder: 'ats-resumes',
-        resource_type: 'raw',
-        public_id: `resume_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        use_filename: true,
-        unique_filename: true,
-      });
-      resumePath = uploadResult.secure_url;
-    } catch (cloudErr) {
-      console.error('Cloudinary upload error:', cloudErr.message);
-      // Continue without cloud URL — candidate still gets created
-    }
+   let resumePath = null;
+try {
+  resumePath = await uploadResume(file.path, file.originalname);
+} catch (cloudErr) {
+  console.error('Cloudinary upload error:', cloudErr.message);
+}
 
     // 4. Check duplicate by email
     if (parsed.email) {

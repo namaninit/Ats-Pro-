@@ -4,7 +4,7 @@ module.exports = (sequelize) => sequelize.define('Interview', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   companyId: { type: DataTypes.INTEGER, allowNull: false },
   candidateId: { type: DataTypes.INTEGER, allowNull: false },
-  jobId: { type: DataTypes.INTEGER, allowNull: false },
+  jobId: { type: DataTypes.INTEGER, allowNull: true, },
   interviewerId: { type: DataTypes.INTEGER, allowNull: true },
   scheduledAt: { type: DataTypes.DATE, allowNull: false },
   mode: { type: DataTypes.ENUM('in_person','video','phone'), defaultValue: 'video' },

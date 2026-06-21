@@ -20,6 +20,12 @@ router.post('/', auth, planLimit('candidates'), upload.single('resume'), async (
   try {
     const data = { ...req.body, companyId: req.companyId };
     if (req.file) {  // ← ADD THIS CHECK
+       const stats = fs.statSync(req.file.path);
+      console.log('📁 File path:', req.file.path);
+      console.log('📁 File size on disk:', stats.size, 'bytes');
+      console.log('📁 Multer reported size:', req.file.size, 'bytes');
+      console.log('📁 Mimetype:', req.file.mimetype);
+      console.log('📁 Original name:', req.file.originalname);
       data.resumePath = await uploadResume(req.file.path, req.file.originalname);
       fs.unlinkSync(req.file.path);
     }

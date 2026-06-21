@@ -13,12 +13,12 @@ export default function Sidebar({ mobileOpen, onClose }) {
   const NAV = [
     { to: '/dashboard',      icon: '⬛', label: 'Dashboard',      roles: ['super_admin','recruiter','client'] },
     { to: '/candidates',     icon: '👤', label: 'Candidates',     roles: ['super_admin','recruiter'] },
-    { to: '/bulk-upload',    icon: '📄', label: 'Bulk Upload',    roles: ['super_admin','recruiter'] },
+    // { to: '/bulk-upload',    icon: '📄', label: 'Bulk Upload',    roles: ['super_admin','recruiter'] },
     { to: '/pipeline',       icon: '🔀', label: 'Pipeline',       roles: ['super_admin','recruiter'] },
     { to: '/jobs',           icon: '💼', label: 'Jobs',           roles: ['super_admin','recruiter','client'] },
     { to: '/clients',        icon: '🏢', label: 'Clients',        roles: ['super_admin'] },
     { to: '/interviews',     icon: '📅', label: 'Interviews',     roles: ['super_admin','recruiter'] },
-    { to: '/resume-scanner', icon: '🎯', label: 'Resume Scanner', roles: ['super_admin','recruiter'] },
+    // { to: '/resume-scanner', icon: '🎯', label: 'Resume Scanner', roles: ['super_admin','recruiter'] },
     { to: '/gmail-import',   icon: '📧', label: 'Gmail Import',   roles: ['super_admin'] },
   ].filter(item => item.roles.includes(role));
 

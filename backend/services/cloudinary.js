@@ -7,18 +7,17 @@ cloudinary.config({
 });
 
 const uploadResume = async (filePath, fileName) => {
+  const ext = (fileName.split('.').pop() || 'pdf').toLowerCase();
+
   const result = await cloudinary.uploader.upload(filePath, {
     folder: 'ats-resumes',
     resource_type: 'raw',
     public_id: `resume_${Date.now()}`,
-    format: 'pdf'
+    // DO NOT force format — let Cloudinary keep the real file type
   });
-  
-  // Convert to viewable URL
-  const viewableUrl = result.secure_url
-    .replace('/raw/upload/', '/raw/upload/fl_attachment:false/');
-  
-  return viewableUrl;
+
+  // result.secure_url already works directly — no fl_attachment hack needed for raw files
+  return result.secure_url;
 };
 
 module.exports = { uploadResume };
