@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { jobAPI, clientAPI } from '../hooks/useApi';
+import { jobAPI, clientAPI, jobTemplateAPI } from '../hooks/useApi';
 
 const JOB_STATUSES = ['open', 'closed', 'on_hold', 'filled'];
 const JOB_TYPES = ['full_time', 'part_time', 'contract', 'remote'];
@@ -12,6 +12,43 @@ const STATUS_COLORS = {
   filled: { bg: '#dcfce7', color: '#166534', border: '#86efac' },
 };
 
+const DEFAULT_TEMPLATES = [
+  {
+    id: 'default-swe',
+    title: 'Software Engineer',
+    description: `About the Role
+We are looking for a talented Software Engineer to join our team and help design, develop, and maintain high-quality software solutions.
+
+Key Responsibilities
+- Design, develop, test, and maintain software applications.
+- Write clean, efficient, and well-documented code.
+- Collaborate with product managers, designers, and other engineers to define and implement new features.
+- Review code and provide constructive feedback to team members.
+- Troubleshoot, debug, and resolve software issues.
+- Optimize applications for performance, scalability, and reliability.
+- Participate in Agile ceremonies, including sprint planning, daily stand-ups, and retrospectives.
+
+Required Qualifications
+- Bachelor's degree in Computer Science, Software Engineering, or related field (or equivalent experience).
+- Strong proficiency in one or more programming languages such as Java, Python, C#, JavaScript, Go, or C++.
+- Experience with Git and version control workflows.
+- Knowledge of databases (SQL and/or NoSQL).
+- Strong analytical, problem-solving, and communication skills.
+
+Preferred Qualifications
+- Experience with cloud platforms (AWS, Azure, or Google Cloud).
+- Familiarity with Docker, Kubernetes, or containerization technologies.
+- Experience with RESTful APIs, GraphQL, or microservices.
+- Knowledge of CI/CD pipelines and DevOps practices.
+
+What We Offer
+- Competitive salary and performance bonuses
+- Health and wellness benefits
+- Flexible work arrangements
+- Professional development opportunities`
+  }
+];
+
 function JobModal({ job, clients, onClose, onSave }) {
   const [form, setForm] = useState(job || {
     title: '', clientId: '', description: '', requiredSkills: '',
@@ -19,7 +56,40 @@ function JobModal({ job, clients, onClose, onSave }) {
     location: '', jobType: 'full_time', status: 'open', openings: 1, deadline: ''
   });
   const [saving, setSaving] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const handle = (e) => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+
+  useEffect(() => {
+    jobTemplateAPI.getAll()
+      .then(res => setTemplates(res.data || []))
+      .catch(() => setTemplates([]));
+  }, []);
+
+  const allTemplates = [...DEFAULT_TEMPLATES, ...templates];
+
+  const applyTemplate = (id) => {
+    setSelectedTemplateId(id);
+    if (!id) return;
+    const t = allTemplates.find(t => String(t.id) === String(id));
+    if (t) setForm(p => ({ ...p, description: t.description }));
+  };
+
+  const saveAsTemplate = async () => {
+    if (!form.description?.trim()) { toast.error('Description is empty'); return; }
+    const title = window.prompt('Name this template (e.g. "Software Engineer"):', form.title || 'Untitled Template');
+    if (!title) return;
+    setSavingTemplate(true);
+    try {
+      await jobTemplateAPI.create({ title, description: form.description });
+      toast.success('Template saved!');
+      const res = await jobTemplateAPI.getAll();
+      setTemplates(res.data || []);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save template');
+    } finally { setSavingTemplate(false); }
+  };
 
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
@@ -81,7 +151,32 @@ function JobModal({ job, clients, onClose, onSave }) {
               </div>
               <div className="form-group"><label className="form-label">Deadline</label><input className="form-input" type="date" name="deadline" value={form.deadline || ''} onChange={handle} /></div>
             </div>
-            <div className="form-group"><label className="form-label">Description</label><textarea className="form-input" name="description" value={form.description} onChange={handle} rows={3} /></div>
+
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <select
+                  className="form-input form-select"
+                  style={{ flex: 1 }}
+                  value={selectedTemplateId}
+                  onChange={e => applyTemplate(e.target.value)}
+                >
+                  <option value="">-- Insert Template --</option>
+                  {allTemplates.map(t => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={saveAsTemplate}
+                  disabled={savingTemplate}
+                >
+                  {savingTemplate ? 'Saving...' : '💾 Save as Template'}
+                </button>
+              </div>
+              <textarea className="form-input" name="description" value={form.description} onChange={handle} rows={8} />
+            </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>

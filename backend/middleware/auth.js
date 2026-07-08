@@ -69,4 +69,16 @@ const planLimit = (resource) => async (req, res, next) => {
   }
 };
 
-module.exports = { auth, requireRole, planLimit };
+const requirePermission = (permKey) => (req, res, next) => {
+  // super_admin and master_admin bypass all permission checks
+  if (['super_admin', 'master_admin'].includes(req.user.role)) return next();
+  
+  const perms = req.user.permissions || {};
+  if (!perms[permKey]) {
+    return res.status(403).json({ message: 'You do not have permission for this action' });
+  }
+  next();
+};
+
+
+module.exports = { auth, requireRole, planLimit , requirePermission };

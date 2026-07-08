@@ -31,6 +31,12 @@ export const jobAPI = {
   delete: (id) => axios.delete(`/api/jobs/${id}`),
 };
 
+export const jobTemplateAPI = {
+  getAll: () => axios.get('/api/job-templates'),
+  create: (data) => axios.post('/api/job-templates', data),
+  delete: (id) => axios.delete(`/api/job-templates/${id}`),
+};
+
 export const interviewAPI = {
   getAll: (params) => axios.get('/api/interviews', { params }),
   create: (data) => axios.post('/api/interviews', data),

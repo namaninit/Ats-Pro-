@@ -12,4 +12,16 @@ module.exports = (sequelize) => sequelize.define('User', {
   avatar: { type: DataTypes.STRING(255), allowNull: true },
   resetToken: { type: DataTypes.STRING(255), allowNull: true },
 resetTokenExpiry: { type: DataTypes.DATE, allowNull: true },
+permissions: {
+  type: DataTypes.JSON,
+  allowNull: true,
+  defaultValue: {
+    canDelete: false,
+    canEdit: true,
+    canGmailImport: false,
+    canBulkUpload: true,
+    canViewCTC: true,
+    canScheduleInterview: true,
+  }
+},
 }, { tableName: 'users', timestamps: true });

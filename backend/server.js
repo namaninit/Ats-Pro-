@@ -50,6 +50,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/candidates', require('./routes/candidates'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/jobs', require('./routes/jobs'));
+app.use('/api/job-templates', require('./routes/jobTemplates'));
 app.use('/api/interviews', require('./routes/interviews'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/users', require('./routes/users'));

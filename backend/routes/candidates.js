@@ -6,6 +6,7 @@ const { Candidate, Job, Client } = require('../models');
 const { uploadResume } = require('../services/cloudinary');
 const fs = require('fs');
 
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads/resumes')),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`)
@@ -227,5 +228,7 @@ router.post('/import-excel', auth, multerExcel.single('excel'), async (req, res)
     res.status(500).json({ message: err.message || 'Import failed' });
   }
 });
+
+
 
 module.exports = router;

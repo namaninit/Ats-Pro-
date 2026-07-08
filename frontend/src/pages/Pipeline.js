@@ -1,64 +1,81 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { candidateAPI } from '../hooks/useApi';
 
-const COLUMNS = [
-  { key: 'new', label: 'New', color: '#3b82f6' },
+const STAGES = [
+  { key: 'new',       label: 'New',       color: '#3b82f6' },
   { key: 'screening', label: 'Screening', color: '#f59e0b' },
   { key: 'interview', label: 'Interview', color: '#8b5cf6' },
-  { key: 'offered', label: 'Offered', color: '#34d399' },
-  { key: 'hired', label: 'Hired', color: '#10b981' },
-  { key: 'rejected', label: 'Rejected', color: '#ef4444' },
+  { key: 'offered',   label: 'Offered',   color: '#34d399' },
+  { key: 'hired',     label: 'Hired',     color: '#10b981' },
+  { key: 'rejected',  label: 'Rejected',  color: '#ef4444' },
 ];
 
+const PAGE_SIZE = 10;
+
 export default function Pipeline() {
-  const [columns, setColumns] = useState(() => Object.fromEntries(COLUMNS.map(c => [c.key, []])));
+  const [columns, setColumns] = useState({});
+  const [pages, setPages] = useState({});
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await candidateAPI.getAll({ limit: 200 });
-      const grouped = Object.fromEntries(COLUMNS.map(c => [c.key, []]));
-      r.data.candidates.forEach(c => { if (grouped[c.status]) grouped[c.status].push(c); });
+      const r = await candidateAPI.getAll({ limit: 1000 });
+      const all = r.data.candidates || [];
+      const grouped = {};
+      const initPages = {};
+      STAGES.forEach(s => {
+        grouped[s.key] = all.filter(c => c.status === s.key);
+        initPages[s.key] = 1;
+      });
       setColumns(grouped);
-    } catch { toast.error('Failed to load pipeline'); }
-    finally { setLoading(false); }
+      setPages(initPages);
+    } catch {
+      toast.error('Failed to load pipeline');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const onDragEnd = async (result) => {
     const { source, destination, draggableId } = result;
-    if (!destination || (source.droppableId === destination.droppableId && source.index === destination.index)) return;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId) return;
 
-    const srcCol = source.droppableId;
-    const dstCol = destination.droppableId;
+    const srcKey = source.droppableId;
+    const dstKey = destination.droppableId;
+    const candidateId = draggableId;
 
-    // Optimistically update
-    const card = columns[srcCol][source.index];
-    const newCols = { ...columns };
-    newCols[srcCol] = [...columns[srcCol]];
-    newCols[srcCol].splice(source.index, 1);
-    newCols[dstCol] = [...columns[dstCol]];
-    newCols[dstCol].splice(destination.index, 0, { ...card, status: dstCol });
-    setColumns(newCols);
+    const candidate = columns[srcKey].find(c => String(c.id) === candidateId);
+    if (!candidate) return;
+
+    const newColumns = { ...columns };
+    newColumns[srcKey] = newColumns[srcKey].filter(c => String(c.id) !== candidateId);
+    newColumns[dstKey] = [{ ...candidate, status: dstKey }, ...newColumns[dstKey]];
+    setColumns(newColumns);
 
     try {
-      await candidateAPI.updateStatus(draggableId, dstCol);
-      toast.success(`Moved to ${dstCol}`);
+      await candidateAPI.updateStatus(candidateId, dstKey);
+      toast.success(`${candidate.name} → ${dstKey}`);
     } catch {
+      setColumns(columns); // revert
       toast.error('Failed to update status');
-      load(); // revert
     }
   };
+
+  const setPage = (stageKey, p) => setPages(prev => ({ ...prev, [stageKey]: p }));
 
   if (loading) return <div className="loading"><div className="spinner" /></div>;
 
   return (
     <div>
-      <div className="page-header" style={{ marginBottom: 20 }}>
+      <div className="page-header">
         <div>
           <h2 className="page-title">Recruitment Pipeline</h2>
           <p className="page-subtitle">Drag candidates across stages</p>
@@ -66,69 +83,147 @@ export default function Pipeline() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="kanban-board">
-          {COLUMNS.map(col => (
-            <div key={col.key} className="kanban-column">
-              <div className="kanban-col-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: col.color }} />
-                  <span className="kanban-col-title" style={{ color: col.color }}>{col.label}</span>
+        <div style={{
+          display: 'flex', gap: 12, overflowX: 'auto',
+          paddingBottom: 16, alignItems: 'flex-start',
+        }}>
+          {STAGES.map(stage => {
+            const all = columns[stage.key] || [];
+            const total = all.length;
+            const currentPage = pages[stage.key] || 1;
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+            const pageItems = all.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+            return (
+              <div key={stage.key} style={{
+                minWidth: 220, maxWidth: 240, flexShrink: 0,
+                background: 'var(--bg-surface)', borderRadius: 12,
+                border: '1px solid var(--border)',
+                display: 'flex', flexDirection: 'column',
+              }}>
+                {/* Column header */}
+                <div style={{
+                  padding: '12px 14px', borderBottom: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: stage.color, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{stage.label}</span>
+                  </div>
+                  <span style={{
+                    background: stage.color + '20', color: stage.color,
+                    borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700,
+                  }}>{total}</span>
                 </div>
-                <span className="kanban-col-count">{columns[col.key].length}</span>
-              </div>
-              <Droppable droppableId={col.key}>
-                {(provided, snapshot) => (
-                  <div
-                    className="kanban-cards"
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    style={{ background: snapshot.isDraggingOver ? 'rgba(99,102,241,0.05)' : undefined, minHeight: 80 }}
-                  >
-                    {columns[col.key].map((c, index) => (
-                      <Draggable key={String(c.id)} draggableId={String(c.id)} index={index}>
-                        {(provided, snapshot) => (
-                          <div
-                            className="kanban-card"
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            style={{
-                              ...provided.draggableProps.style,
-                              opacity: snapshot.isDragging ? 0.85 : 1,
-                              boxShadow: snapshot.isDragging ? '0 8px 32px rgba(99,102,241,0.3)' : undefined,
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                              <div className="avatar" style={{ width: 28, height: 28, fontSize: 11 }}>{c.name[0]}</div>
-                              <div className="kanban-card-name" style={{ fontSize: 13 }}>{c.name}</div>
-                            </div>
-                            <div className="kanban-card-meta">
-                              {c.experience > 0 && <span>⏱ {c.experience} yrs exp</span>}
-                              {c.job && <span>💼 {c.job.title}</span>}
-                              {c.expectedCTC && <span>💰 ₹{c.expectedCTC} LPA</span>}
-                              {Array.isArray(c.skills) && c.skills.length > 0 && (
-                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginTop: 4 }}>
-                                  {c.skills.slice(0, 2).map(s => (
-                                    <span key={s} style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--accent-light)', borderRadius: 3, padding: '1px 5px', fontSize: 10 }}>{s}</span>
-                                  ))}
+
+                {/* Droppable area */}
+                <Droppable droppableId={stage.key}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      style={{
+                        padding: 8, flex: 1,
+                        minHeight: 80,
+                        background: snapshot.isDraggingOver ? stage.color + '08' : 'transparent',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {pageItems.map((c, idx) => (
+                        <Draggable key={String(c.id)} draggableId={String(c.id)} index={idx}>
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              onClick={() => navigate(`/candidates/${c.id}`)}
+                              style={{
+                                ...provided.draggableProps.style,
+                                background: snapshot.isDragging ? 'var(--bg-elevated)' : 'var(--bg-elevated)',
+                                border: `1px solid ${snapshot.isDragging ? stage.color + '60' : 'var(--border)'}`,
+                                borderRadius: 8, padding: '9px 10px', marginBottom: 6,
+                                cursor: 'grab', boxShadow: snapshot.isDragging ? '0 4px 16px rgba(0,0,0,0.25)' : 'none',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 26, height: 26, borderRadius: '50%',
+                                  background: stage.color + '20', color: stage.color,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: 11, fontWeight: 700, flexShrink: 0,
+                                }}>
+                                  {c.name?.[0]?.toUpperCase()}
                                 </div>
-                              )}
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {c.name}
+                                  </div>
+                                  {c.currentLocation && (
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                                      📍 {c.currentLocation}
+                                    </div>
+                                  )}
+                                  {c.experience > 0 && (
+                                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                      {c.experience} yrs exp
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                    {columns[col.key].length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '24px 8px', color: 'var(--text-muted)', fontSize: 12 }}>
-                        Drop here
-                      </div>
-                    )}
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+
+                      {pageItems.length === 0 && total === 0 && (
+                        <div style={{ textAlign: 'center', padding: '20px 8px', color: 'var(--text-muted)', fontSize: 11 }}>
+                          No candidates
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Droppable>
+
+                {/* Column pagination */}
+                {totalPages > 1 && (
+                  <div style={{
+                    padding: '8px 10px', borderTop: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: 6,
+                  }}>
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setPage(stage.key, currentPage - 1)}
+                      style={{
+                        width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
+                        background: 'var(--bg-elevated)', cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                        color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)',
+                        fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >‹</button>
+
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+                      {currentPage}/{totalPages}
+                    </span>
+
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setPage(stage.key, currentPage + 1)}
+                      style={{
+                        width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)',
+                        background: 'var(--bg-elevated)', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                        color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
+                        fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >›</button>
                   </div>
                 )}
-              </Droppable>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </DragDropContext>
     </div>
