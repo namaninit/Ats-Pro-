@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { interviewAPI, candidateAPI, jobAPI, userAPI } from '../hooks/useApi';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 
 function InterviewModal({ interview, candidates, jobs, users, onClose, onSave }) {
@@ -74,6 +74,132 @@ function InterviewModal({ interview, candidates, jobs, users, onClose, onSave })
   );
 }
 
+const STATUS_DOT = {
+  scheduled: '#6366f1',
+  completed: '#10b981',
+  cancelled: '#ef4444',
+  no_show: '#f59e0b',
+};
+
+function CalendarView({ interviews, onSelectInterview, onAddOnDay }) {
+  const [cursor, setCursor] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  const monthStart = startOfMonth(cursor);
+  const monthEnd = endOfMonth(cursor);
+  const gridStart = startOfWeek(monthStart);
+  const gridEnd = endOfWeek(monthEnd);
+
+  const days = [];
+  let day = gridStart;
+  while (day <= gridEnd) { days.push(day); day = addDays(day, 1); }
+
+  const interviewsByDay = {};
+  interviews.forEach(i => {
+    const key = format(new Date(i.scheduledAt), 'yyyy-MM-dd');
+    if (!interviewsByDay[key]) interviewsByDay[key] = [];
+    interviewsByDay[key].push(i);
+  });
+
+  const selectedKey = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : null;
+  const selectedInterviews = selectedKey ? (interviewsByDay[selectedKey] || []) : [];
+
+  return (
+    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      {/* Calendar grid */}
+      <div style={{ flex: 2, minWidth: 420 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setCursor(subMonths(cursor, 1))}>‹</button>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{format(cursor, 'MMMM yyyy')}</div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setCursor(addMonths(cursor, 1))}>›</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 6 }}>
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0' }}>{d}</div>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+          {days.map(d => {
+            const key = format(d, 'yyyy-MM-dd');
+            const dayInterviews = interviewsByDay[key] || [];
+            const inMonth = isSameMonth(d, cursor);
+            const isToday = isSameDay(d, new Date());
+            const isSelected = selectedDay && isSameDay(d, selectedDay);
+            return (
+              <div
+                key={key}
+                onClick={() => setSelectedDay(d)}
+                style={{
+                  minHeight: 70, borderRadius: 8, padding: 6, cursor: 'pointer',
+                  background: isSelected ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                  border: isToday ? '1px solid var(--accent)' : '1px solid transparent',
+                  opacity: inMonth ? 1 : 0.35,
+                  transition: 'background 0.15s'
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? 'var(--accent-light)' : 'var(--text-secondary)', marginBottom: 4 }}>
+                  {format(d, 'd')}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                  {dayInterviews.slice(0, 4).map(iv => (
+                    <span key={iv.id} title={iv.candidate?.name} style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT[iv.status] || '#999', display: 'inline-block' }} />
+                  ))}
+                  {dayInterviews.length > 4 && <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>+{dayInterviews.length - 4}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 14, marginTop: 14, fontSize: 11, color: 'var(--text-muted)' }}>
+          {Object.entries(STATUS_DOT).map(([status, color]) => (
+            <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' }} />
+              {status.replace('_', ' ')}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Day detail panel */}
+      <div style={{ flex: 1, minWidth: 280 }}>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>
+            {selectedDay ? format(selectedDay, 'EEEE, MMM d, yyyy') : 'Select a day'}
+          </div>
+          {!selectedDay ? (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Click a date on the calendar to see interviews.</p>
+          ) : selectedInterviews.length === 0 ? (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>No interviews scheduled.</p>
+              <button className="btn btn-secondary btn-sm" onClick={() => onAddOnDay(selectedDay)}>+ Schedule Interview</button>
+            </>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedInterviews.map(iv => (
+                <div key={iv.id} onClick={() => onSelectInterview(iv)} style={{
+                  padding: '10px 12px', borderRadius: 8, background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-light)', cursor: 'pointer'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{iv.candidate?.name}</div>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[iv.status] }} />
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{iv.job?.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {format(new Date(iv.scheduledAt), 'h:mm a')} · {iv.mode === 'video' ? '📹' : iv.mode === 'phone' ? '📞' : '🏢'} R{iv.round}
+                  </div>
+                </div>
+              ))}
+              <button className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} onClick={() => onAddOnDay(selectedDay)}>+ Schedule Another</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Interviews() {
   const { user } = useAuth();
   const [interviews, setInterviews] = useState([]);
@@ -83,6 +209,7 @@ export default function Interviews() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [filterStatus, setFilterStatus] = useState('');
+  const [viewMode, setViewMode] = useState('list');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +236,11 @@ export default function Interviews() {
     try { await interviewAPI.delete(id); toast.success('Deleted'); load(); } catch { toast.error('Delete failed'); }
   };
 
+  const openOnDay = (day) => {
+    const iso = new Date(day.getTime() - day.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setModal({ scheduledAt: iso });
+  };
+
   const OUTCOME_COLORS = { pass: 'var(--green)', fail: 'var(--red)', hold: 'var(--amber)', pending: 'var(--text-muted)' };
 
   return (
@@ -117,13 +249,21 @@ export default function Interviews() {
         <div><h2 className="page-title">Interviews</h2><p className="page-subtitle">{interviews.length} total</p></div>
         <button className="btn btn-primary" onClick={() => setModal({})}>📅 Schedule Interview</button>
       </div>
-      <div className="search-bar">
+
+      <div className="search-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <select className="form-input form-select" style={{ width: 160 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">All Status</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
         </select>
+        <div style={{ display: 'flex', background: 'var(--bg-elevated)', borderRadius: 8, padding: 3, gap: 2 }}>
+          <button onClick={() => setViewMode('list')} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: viewMode === 'list' ? 'var(--accent)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--text-secondary)' }}>☰ List</button>
+          <button onClick={() => setViewMode('calendar')} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: viewMode === 'calendar' ? 'var(--accent)' : 'transparent', color: viewMode === 'calendar' ? '#fff' : 'var(--text-secondary)' }}>📅 Calendar</button>
+        </div>
       </div>
+
       {loading ? <div className="loading"><div className="spinner" /></div> : interviews.length === 0 ? (
         <div className="empty-state"><div className="empty-state-icon">📅</div><h3>No interviews scheduled</h3></div>
+      ) : viewMode === 'calendar' ? (
+        <CalendarView interviews={interviews} onSelectInterview={setModal} onAddOnDay={openOnDay} />
       ) : (
         <div className="table-wrapper">
           <table className="table">
