@@ -16,6 +16,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
     // { to: '/bulk-upload',    icon: '📄', label: 'Bulk Upload',    roles: ['super_admin','recruiter'] },
     { to: '/pipeline',       icon: '🔀', label: 'Pipeline',       roles: ['super_admin','recruiter'] },
     { to: '/jobs',           icon: '💼', label: 'Jobs',           roles: ['super_admin','recruiter','client'] },
+    { to: '/job-boards',     icon: '🌐', label: 'Job Boards',     roles: ['super_admin','recruiter'] },
     { to: '/clients',        icon: '🏢', label: 'Clients',        roles: ['super_admin'] },
     { to: '/interviews',     icon: '📅', label: 'Interviews',     roles: ['super_admin','recruiter'] },
     // { to: '/resume-scanner', icon: '🎯', label: 'Resume Scanner', roles: ['super_admin','recruiter'] },

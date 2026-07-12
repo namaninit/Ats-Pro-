@@ -20,6 +20,8 @@ import BulkResumeUpload from './pages/BulkResumeUpload';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ErrorBoundary from './components/ErrorBoundary';
+import PublicCareers from './pages/PublicCareers';
+import JobBoards from './pages/JobBoards';
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -46,6 +48,9 @@ const AppRoutes = () => {
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
+
+<Route path="/careers/:companyId" element={<PublicCareers />} />
+<Route path="/job-boards" element={<JobBoards />} />
 
         <Route path="candidates" element={
           <PrivateRoute roles={['super_admin', 'recruiter']}>

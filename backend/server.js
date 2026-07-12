@@ -57,6 +57,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/master', require('./routes/masterAdmin'));
 app.use('/api/resume-scanner', require('./routes/resumeScanner'));
+app.use('/api/public', require('./routes/public'));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));

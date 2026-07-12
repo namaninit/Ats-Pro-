@@ -1,13 +1,12 @@
-const express = require('express');
-const router = express.Router();
+const router = require('express').Router();
 const { JobTemplate } = require('../models');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 
 // Get all templates for the logged-in user's company
 router.get('/', auth, async (req, res) => {
   try {
     const templates = await JobTemplate.findAll({
-      where: { companyId: req.user.companyId },
+      where: { companyId: req.companyId },
       order: [['createdAt', 'DESC']]
     });
     res.json(templates);
@@ -21,7 +20,7 @@ router.post('/', auth, async (req, res) => {
   try {
     const { title, description } = req.body;
     const template = await JobTemplate.create({
-      companyId: req.user.companyId,
+      companyId: req.companyId,
       title,
       description,
       createdBy: req.user.id
@@ -36,7 +35,7 @@ router.post('/', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     const template = await JobTemplate.findOne({
-      where: { id: req.params.id, companyId: req.user.companyId }
+      where: { id: req.params.id, companyId: req.companyId }
     });
     if (!template) return res.status(404).json({ message: 'Not found' });
     await template.destroy();

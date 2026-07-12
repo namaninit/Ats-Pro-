@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { jobAPI, clientAPI, jobTemplateAPI } from '../hooks/useApi';
+import JobBoardPanel from '../components/JobBoardPanel';
 
 const JOB_STATUSES = ['open', 'closed', 'on_hold', 'filled'];
 const JOB_TYPES = ['full_time', 'part_time', 'contract', 'remote'];
@@ -214,6 +215,7 @@ function JobRow({ j, selected, onSelect, onEdit, onDelete, onCloseJob }) {
             {['#3b82f6','#f59e0b','#10b981'].map((c,i) => <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'inline-block' }} />)}
           </span>
         </div>
+        <JobBoardPanel job={j} />
       </td>
       <td>
         <span style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>

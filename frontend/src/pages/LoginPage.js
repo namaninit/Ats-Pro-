@@ -162,11 +162,11 @@ export default function LoginPage() {
               </div>
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-  <label className="form-label">Password</label>
-  <a href="/forgot-password" style={{ fontSize: 12, color: 'var(--accent-light)' }}>
-    Forgot password?
-  </a>
-</div>
+                  <label className="form-label">Password</label>
+                  <a href="/forgot-password" style={{ fontSize: 12, color: 'var(--accent-light)' }}>
+                    Forgot password?
+                  </a>
+                </div>
                 <div style={{ position: 'relative' }}>
                   <input className={`form-input ${errors.password ? 'input-error' : ''}`} type={showPass ? 'text' : 'password'} name="password" value={form.password} onChange={handle} placeholder="••••••••" style={{ paddingRight: 44 }} />
                   <button type="button" onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--text-muted)' }}>
@@ -175,29 +175,11 @@ export default function LoginPage() {
                 </div>
                 {errors.password && <span style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, display: 'block' }}>{errors.password}</span>}
               </div>
-              
+
               <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: 15, marginTop: 8, borderRadius: 10 }} disabled={loading}>
                 {loading ? <><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> Signing in...</> : '→ Sign In'}
               </button>
             </form>
-            <div style={{ marginTop: 28, padding: '16px', background: 'var(--bg-elevated)', borderRadius: 10, border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Demo Credentials</div>
-              {[
-                { role: 'Super Admin', email: 'admin@ats.com', pass: 'admin123', color: 'var(--accent-light)' },
-                { role: 'Recruiter', email: 'priya@ats.com', pass: 'recruiter123', color: 'var(--green)' },
-              ].map(d => (
-                <div key={d.role} onClick={() => setForm(p => ({ ...p, email: d.email, password: d.pass }))}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 7, cursor: 'pointer', marginBottom: 4, transition: 'background 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ background: d.color + '20', color: d.color, borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>{d.role}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{d.email}</span>
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Click to fill</span>
-                </div>
-              ))}
-            </div>
           </>
         ) : (
           <>
