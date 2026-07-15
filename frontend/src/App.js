@@ -22,6 +22,8 @@ import ResetPassword from './pages/ResetPassword';
 import ErrorBoundary from './components/ErrorBoundary';
 import PublicCareers from './pages/PublicCareers';
 import JobBoards from './pages/JobBoards';
+import JobDetail from './pages/JobDetail';
+
 
 const PrivateRoute = ({ children, roles }) => {
   const { user, loading } = useAuth();
@@ -51,6 +53,8 @@ const AppRoutes = () => {
 
 <Route path="/careers/:companyId" element={<PublicCareers />} />
 <Route path="/job-boards" element={<JobBoards />} />
+<Route path="/jobs/:id" element={<JobDetail />} />
+
 
         <Route path="candidates" element={
           <PrivateRoute roles={['super_admin', 'recruiter']}>

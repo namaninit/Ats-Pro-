@@ -203,8 +203,7 @@ function JobRow({ j, selected, onSelect, onEdit, onDelete, onCloseJob }) {
       <td><input type="checkbox" checked={selected} onChange={() => onSelect(j.id)} style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }} /></td>
       <td style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>#{j.id}</td>
       <td>
-        <div style={{ fontWeight: 600, fontSize: 13 }}>{j.title}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>📍 {j.location || '—'}</div>
+<div style={{ fontWeight: 600, fontSize: 13, cursor: 'pointer', color: 'var(--accent-light)' }} onClick={() => window.location.href = `/jobs/${j.id}`}>{j.title}</div>        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>📍 {j.location || '—'}</div>
         <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
           {/* JD Button */}
           <span title="Job Description" style={{ background: '#dbeafe', color: '#1e40af', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>JD</span>
