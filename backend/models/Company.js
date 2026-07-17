@@ -9,6 +9,7 @@ module.exports = (sequelize) => sequelize.define('Company', {
   maxCandidates: { type: DataTypes.INTEGER, defaultValue: 25 },
   maxUsers: { type: DataTypes.INTEGER, defaultValue: 2 },
   isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+  approvalStatus: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'approved' },
   stripeCustomerId: { type: DataTypes.STRING, allowNull: true },
   stripeSubscriptionId: { type: DataTypes.STRING, allowNull: true },
   planExpiresAt: { type: DataTypes.DATE, allowNull: true },

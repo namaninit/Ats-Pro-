@@ -21,25 +21,20 @@ router.post('/register', async (req, res) => {
 
     const company = await Company.create({
       name: companyName, email,
-      plan: 'free', maxJobs: 3, maxCandidates: 25, maxUsers: 2
+      plan: 'free', maxJobs: 3, maxCandidates: 25, maxUsers: 2,
+      approvalStatus: 'pending'
     });
 
     const hash = await bcrypt.hash(password, 12);
-    const user = await User.create({
+    await User.create({
       name, email, password: hash,
       role: 'super_admin', companyId: company.id
     });
 
-    const token = jwt.sign(
-      { id: user.id, companyId: company.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
+    // No token issued — account is pending Master Admin approval.
     res.status(201).json({
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, companyId: company.id },
-      company
+      pending: true,
+      message: 'Account created! Your company is pending approval by our team. You will be able to log in once approved.'
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -67,6 +62,12 @@ router.post('/login', async (req, res) => {
     if (user.role !== 'master_admin') {
       if (!user.company || !user.company.isActive)
         return res.status(403).json({ message: 'Company not found or suspended' });
+
+      if (user.company.approvalStatus === 'pending')
+        return res.status(403).json({ message: 'Your account is still pending approval. We\'ll notify you once it\'s reviewed.' });
+
+      if (user.company.approvalStatus === 'rejected')
+        return res.status(403).json({ message: 'Your signup was not approved. Contact support for details.' });
     }
 
     const token = jwt.sign(

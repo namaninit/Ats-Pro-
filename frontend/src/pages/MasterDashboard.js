@@ -26,9 +26,10 @@ export default function MasterDashboard() {
   const [masterUser, setMasterUser] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [pending, setPending] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('pending');
   const [search, setSearch] = useState('');
   const [expandedCompany, setExpandedCompany] = useState(null);
 
@@ -60,14 +61,16 @@ export default function MasterDashboard() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cr, sr, ur] = await Promise.all([
+      const [cr, sr, ur, pr] = await Promise.all([
         masterAxios.get('/api/master/companies'),
         masterAxios.get('/api/master/stats'),
         masterAxios.get('/api/master/users'),
+        masterAxios.get('/api/master/pending'),
       ]);
       setCompanies(cr.data);
       setStats(sr.data);
       setAllUsers(ur.data);
+      setPending(pr.data);
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) {
         toast.error('Session expired. Please log in again.');
@@ -126,6 +129,27 @@ export default function MasterDashboard() {
     }
   };
 
+  const approveCompany = async (company) => {
+    try {
+      await masterAxios.patch(`/api/master/companies/${company.id}/approve`);
+      toast.success(`${company.name} approved ✅`);
+      loadData();
+    } catch {
+      toast.error('Approve failed');
+    }
+  };
+
+  const rejectCompany = async (company) => {
+    if (!window.confirm(`Reject signup for "${company.name}"? They will not be able to log in.`)) return;
+    try {
+      await masterAxios.patch(`/api/master/companies/${company.id}/reject`);
+      toast.success(`${company.name} rejected`);
+      loadData();
+    } catch {
+      toast.error('Reject failed');
+    }
+  };
+
   const toggleUser = async (user) => {
     try {
       await masterAxios.put(`/api/master/users/${user.id}`, {
@@ -139,6 +163,12 @@ export default function MasterDashboard() {
   };
 
   const filteredCompanies = companies.filter(c =>
+    !search ||
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.email?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredPending = pending.filter(c =>
     !search ||
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.email?.toLowerCase().includes(search.toLowerCase())
@@ -324,11 +354,16 @@ export default function MasterDashboard() {
             borderRadius: 10, padding: 4
           }}>
             {[
+              { key: 'pending',    label: `⏳ Pending Approvals (${pending.length})` },
               { key: 'overview',   label: `🏢 Companies (${companies.length})` },
               { key: 'users',      label: `👥 All Users (${allUsers.length})` },
             ].map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
-                style={s.tab(activeTab === t.key)}>
+                style={{
+                  ...s.tab(activeTab === t.key),
+                  ...(t.key === 'pending' && pending.length > 0 && activeTab !== t.key
+                    ? { color: '#f59e0b' } : {})
+                }}>
                 {t.label}
               </button>
             ))}
@@ -339,7 +374,7 @@ export default function MasterDashboard() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={activeTab === 'overview' ? 'Search companies...' : 'Search users...'}
+              placeholder={activeTab === 'users' ? 'Search users...' : 'Search companies...'}
               style={{
                 paddingLeft: 34, padding: '9px 14px 9px 34px',
                 background: '#0d1322', border: '1px solid #1a2540',
@@ -349,6 +384,61 @@ export default function MasterDashboard() {
             />
           </div>
         </div>
+
+        {/* ── Pending Approvals Tab ── */}
+        {activeTab === 'pending' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filteredPending.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 60, color: '#334155' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+                <div>No pending signups — all caught up</div>
+              </div>
+            ) : filteredPending.map(c => (
+              <div key={c.id} style={{
+                ...s.card,
+                border: '1px solid rgba(245,158,11,0.3)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                  <div style={{
+                    width: 46, height: 46, borderRadius: 12, flexShrink: 0,
+                    background: 'linear-gradient(135deg, #78350f, #92400e)',
+                    border: '1px solid #b45309',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 20, fontWeight: 800, color: '#fbbf24'
+                  }}>
+                    {c.name?.[0]?.toUpperCase()}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>{c.name}</span>
+                      <span style={s.badge('#f59e0b', 'rgba(245,158,11,0.1)')}>⏳ Pending</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>{c.email}</div>
+
+                    {c.users?.map(u => (
+                      <div key={u.id} style={{ fontSize: 12, color: '#94a3b8', marginBottom: 3 }}>
+                        Signed up by <strong style={{ color: '#e2e8f0' }}>{u.name}</strong> ({u.email})
+                        {' · '}{new Date(u.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7, flexShrink: 0, minWidth: 130 }}>
+                    <button onClick={() => approveCompany(c)}
+                      style={s.btn('rgba(16,185,129,0.12)', '#10b981', 'rgba(16,185,129,0.25)')}>
+                      ✅ Approve
+                    </button>
+                    <button onClick={() => rejectCompany(c)}
+                      style={s.btn('rgba(239,68,68,0.1)', '#ef4444', 'rgba(239,68,68,0.2)')}>
+                      ❌ Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ── Companies Tab ── */}
         {activeTab === 'overview' && (
@@ -390,6 +480,12 @@ export default function MasterDashboard() {
                       )}>
                         {c.isActive ? '● Active' : '● Suspended'}
                       </span>
+                      {c.approvalStatus === 'pending' && (
+                        <span style={s.badge('#f59e0b', 'rgba(245,158,11,0.1)')}>⏳ Pending Approval</span>
+                      )}
+                      {c.approvalStatus === 'rejected' && (
+                        <span style={s.badge('#ef4444', 'rgba(239,68,68,0.1)')}>❌ Rejected</span>
+                      )}
                     </div>
                     <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>{c.email}</div>
 

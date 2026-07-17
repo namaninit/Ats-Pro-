@@ -65,12 +65,10 @@ export default function LoginPage() {
     if (!validateRegister()) return;
     setLoading(true);
     try {
-      const r = await axios.post('/api/auth/register', { companyName: form.companyName, name: form.name, email: form.email, password: form.password });
-      localStorage.setItem('ats_token', r.data.token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${r.data.token}`;
-      toast.success('Account created! Welcome to ATS Pro 🎉');
-      navigate('/dashboard');
-      window.location.reload();
+      await axios.post('/api/auth/register', { companyName: form.companyName, name: form.name, email: form.email, password: form.password });
+      toast.success('Account created! Your signup is pending approval — we\'ll notify you once it\'s reviewed.', { duration: 6000 });
+      setForm({ companyName: '', name: '', email: '', password: '', confirmPassword: '' });
+      setTab('login');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
     } finally { setLoading(false); }

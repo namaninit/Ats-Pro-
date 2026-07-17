@@ -70,6 +70,42 @@ router.delete('/companies/:id', auth, masterOnly, async (req, res) => {
   }
 });
 
+// ─── PENDING SIGNUPS ─────────────────────────────────────────────────────────
+router.get('/pending', auth, masterOnly, async (req, res) => {
+  try {
+    const pending = await Company.findAll({
+      where: { approvalStatus: 'pending' },
+      include: [{ model: User, as: 'users', attributes: ['id', 'name', 'email', 'role', 'createdAt'] }],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(pending);
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ message: err.message });
+  }
+});
+
+router.patch('/companies/:id/approve', auth, masterOnly, async (req, res) => {
+  try {
+    const company = await Company.findByPk(req.params.id);
+    if (!company) return res.status(404).json({ message: 'Company not found' });
+    await company.update({ approvalStatus: 'approved' });
+    res.json({ message: `${company.name} approved`, company });
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ message: err.message });
+  }
+});
+
+router.patch('/companies/:id/reject', auth, masterOnly, async (req, res) => {
+  try {
+    const company = await Company.findByPk(req.params.id);
+    if (!company) return res.status(404).json({ message: 'Company not found' });
+    await company.update({ approvalStatus: 'rejected' });
+    res.json({ message: `${company.name} rejected`, company });
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/users', auth, masterOnly, async (req, res) => {
   try {
     const users = await User.findAll({
