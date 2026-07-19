@@ -55,10 +55,10 @@ router.get('/callback', async (req, res) => {
     });
 
     // Redirect to frontend
-    res.redirect(`http://localhost:3000/gmail-import?connected=true&email=${email}`);
+    res.redirect(`${process.env.FRONTEND_URL}/gmail-import?connected=true&email=${email}`);
   } catch (err) {
     console.error('Gmail callback error:', err);
-    res.redirect(`http://localhost:3000/gmail-import?error=true`);
+    res.redirect(`${process.env.FRONTEND_URL}/gmail-import?error=true`);
   }
 });
 
