@@ -22,6 +22,7 @@ permissions: {
     canBulkUpload: true,
     canViewCTC: true,
     canScheduleInterview: true,
+    canViewClients: false,
   }
 },
 }, { tableName: 'users', timestamps: true });

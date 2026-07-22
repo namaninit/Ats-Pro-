@@ -1,21 +1,25 @@
 const router = require('express').Router();
 const { Op } = require('sequelize');
 const { Client, Job } = require('../models');
-const { auth } = require('../middleware/auth');
-const {  requireRole } = require('../middleware/auth');
+const { auth, requireRole, requirePermission } = require('../middleware/auth');
 
-
-// Only super_admin can delete clients
-router.delete('/:id', auth, requireRole('super_admin', 'master_admin'), async (req, res) => {
+// ── LITE LIST (name + id only) ───────────────────────────────────────────────
+// Used for dropdowns (e.g. assigning a client when creating a job).
+// Open to everyone on the company — no sensitive contact/financial data,
+// so this does NOT require the canViewClients permission.
+router.get('/lite', auth, async (req, res) => {
   try {
-    const c = await Client.findOne({ where: { id: req.params.id, companyId: req.companyId } });
-    if (!c) return res.status(404).json({ message: 'Not found' });
-    await c.destroy();
-    res.json({ message: 'Deleted' });
+    const clients = await Client.findAll({
+      where: { companyId: req.companyId },
+      attributes: ['id', 'companyName', 'status'],
+      order: [['companyName', 'ASC']]
+    });
+    res.json(clients);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-router.get('/', auth, async (req, res) => {
+// ── FULL LIST / DETAIL — gated behind canViewClients ─────────────────────────
+router.get('/', auth, requirePermission('canViewClients'), async (req, res) => {
   try {
     const { search, status } = req.query;
     const where = { companyId: req.companyId };
@@ -26,7 +30,7 @@ router.get('/', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, requirePermission('canViewClients'), async (req, res) => {
   try {
     const c = await Client.findOne({ where: { id: req.params.id, companyId: req.companyId }, include: [{ model: Job, as: 'jobs' }] });
     if (!c) return res.status(404).json({ message: 'Not found' });
@@ -34,14 +38,15 @@ router.get('/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-router.post('/', auth, async (req, res) => {
+// ── CREATE / EDIT — reuses the existing canEdit permission ───────────────────
+router.post('/', auth, requirePermission('canEdit'), async (req, res) => {
   try {
     const c = await Client.create({ ...req.body, companyId: req.companyId });
     res.status(201).json(c);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requirePermission('canEdit'), async (req, res) => {
   try {
     const c = await Client.findOne({ where: { id: req.params.id, companyId: req.companyId } });
     if (!c) return res.status(404).json({ message: 'Not found' });
@@ -50,7 +55,8 @@ router.put('/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-router.delete('/:id', auth, async (req, res) => {
+// ── DELETE — restricted to admins only, regardless of permission toggles ────
+router.delete('/:id', auth, requireRole('super_admin', 'master_admin'), async (req, res) => {
   try {
     const c = await Client.findOne({ where: { id: req.params.id, companyId: req.companyId } });
     if (!c) return res.status(404).json({ message: 'Not found' });

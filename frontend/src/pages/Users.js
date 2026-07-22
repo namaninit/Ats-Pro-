@@ -9,6 +9,7 @@ const PERMISSION_DEFS = [
   { key: 'canBulkUpload', label: 'Bulk Upload', desc: 'Upload multiple resumes at once', icon: '📂' },
   { key: 'canViewCTC', label: 'View Salary/CTC', desc: 'See current and expected CTC fields', icon: '💰' },
   { key: 'canScheduleInterview', label: 'Schedule Interviews', desc: 'Create and manage interview schedules', icon: '📅' },
+  { key: 'canViewClients', label: 'View Clients', desc: 'See client company contact details, address, and notes', icon: '🏢' },
 ];
 
 const DEFAULT_PERMISSIONS = {
@@ -18,6 +19,7 @@ const DEFAULT_PERMISSIONS = {
   canBulkUpload: true,
   canViewCTC: true,
   canScheduleInterview: true,
+  canViewClients: false,
 };
 
 const ROLE_META = {

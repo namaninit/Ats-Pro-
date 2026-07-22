@@ -10,6 +10,7 @@ const DEFAULT_PERMISSIONS = {
   canBulkUpload: true,
   canViewCTC: true,
   canScheduleInterview: true,
+  canViewClients: false,
 };
 
 router.get('/', auth, requireRole('super_admin'), async (req, res) => {

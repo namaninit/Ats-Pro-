@@ -25,11 +25,12 @@ import JobBoards from './pages/JobBoards';
 import JobDetail from './pages/JobDetail';
 
 
-const PrivateRoute = ({ children, roles }) => {
+const PrivateRoute = ({ children, roles, permission }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (permission && user.role !== 'super_admin' && !user.permissions?.[permission]) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -78,7 +79,7 @@ const AppRoutes = () => {
         } />
         <Route path="jobs" element={<Jobs />} />
         <Route path="clients" element={
-          <PrivateRoute roles={['super_admin']}>
+          <PrivateRoute roles={['super_admin','recruiter']} permission="canViewClients">
             <Clients />
           </PrivateRoute>
         } />

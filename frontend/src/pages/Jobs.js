@@ -278,7 +278,7 @@ export default function Jobs() {
     try {
       const [jr, cr] = await Promise.all([
         jobAPI.getAll({ status: showAll ? '' : 'open' }),
-        clientAPI.getAll()
+        clientAPI.getLite()
       ]);
       setJobs(jr.data);
       setClients(cr.data);

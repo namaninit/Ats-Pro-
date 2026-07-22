@@ -17,6 +17,7 @@ export const candidateAPI = {
 
 export const clientAPI = {
   getAll: (params) => axios.get('/api/clients', { params }),
+  getLite: () => axios.get('/api/clients/lite'),
   getOne: (id) => axios.get(`/api/clients/${id}`),
   create: (data) => axios.post('/api/clients', data),
   update: (id, data) => axios.put(`/api/clients/${id}`, data),

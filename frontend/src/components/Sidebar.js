@@ -17,11 +17,14 @@ export default function Sidebar({ mobileOpen, onClose }) {
     { to: '/pipeline',       icon: '🔀', label: 'Pipeline',       roles: ['super_admin','recruiter'] },
     { to: '/jobs',           icon: '💼', label: 'Jobs',           roles: ['super_admin','recruiter','client'] },
     { to: '/job-boards',     icon: '🌐', label: 'Job Boards',     roles: ['super_admin','recruiter'] },
-    { to: '/clients',        icon: '🏢', label: 'Clients',        roles: ['super_admin'] },
+    { to: '/clients',        icon: '🏢', label: 'Clients',        roles: ['super_admin','recruiter'], permission: 'canViewClients' },
     { to: '/interviews',     icon: '📅', label: 'Interviews',     roles: ['super_admin','recruiter'] },
     // { to: '/resume-scanner', icon: '🎯', label: 'Resume Scanner', roles: ['super_admin','recruiter'] },
     { to: '/gmail-import',   icon: '📧', label: 'Gmail Import',   roles: ['super_admin'] },
-  ].filter(item => item.roles.includes(role));
+  ].filter(item =>
+    item.roles.includes(role) &&
+    (!item.permission || role === 'super_admin' || user?.permissions?.[item.permission])
+  );
 
   const navStyle = (isActive) => ({
     display: 'flex', alignItems: 'center', gap: 10,
