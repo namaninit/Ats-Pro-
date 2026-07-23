@@ -21,6 +21,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
     { to: '/interviews',     icon: '📅', label: 'Interviews',     roles: ['super_admin','recruiter'] },
     // { to: '/resume-scanner', icon: '🎯', label: 'Resume Scanner', roles: ['super_admin','recruiter'] },
     { to: '/gmail-import',   icon: '📧', label: 'Gmail Import',   roles: ['super_admin'] },
+    { to: '/cv-maker',       icon: '📄', label: 'CV Maker',       roles: ['super_admin','recruiter'] },
   ].filter(item =>
     item.roles.includes(role) &&
     (!item.permission || role === 'super_admin' || user?.permissions?.[item.permission])

@@ -23,6 +23,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import PublicCareers from './pages/PublicCareers';
 import JobBoards from './pages/JobBoards';
 import JobDetail from './pages/JobDetail';
+import CVMaker from './pages/CVMaker';
 
 
 const PrivateRoute = ({ children, roles, permission }) => {
@@ -81,6 +82,11 @@ const AppRoutes = () => {
         <Route path="clients" element={
           <PrivateRoute roles={['super_admin','recruiter']} permission="canViewClients">
             <Clients />
+          </PrivateRoute>
+        } />
+        <Route path="cv-maker" element={
+          <PrivateRoute roles={['super_admin','recruiter']}>
+            <CVMaker />
           </PrivateRoute>
         } />
         <Route path="interviews" element={

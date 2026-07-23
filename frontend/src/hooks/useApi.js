@@ -55,3 +55,12 @@ export const userAPI = {
   update: (id, data) => axios.put(`/api/users/${id}`, data),
   delete: (id) => axios.delete(`/api/users/${id}`),
 };
+
+export const cvMakerAPI = {
+  generate: (data) => axios.post('/api/cv-maker/generate', data),
+  getAll: () => axios.get('/api/cv-maker'),
+  getOne: (id) => axios.get(`/api/cv-maker/${id}`),
+  save: (data) => axios.post('/api/cv-maker', data),
+  update: (id, data) => axios.put(`/api/cv-maker/${id}`, data),
+  delete: (id) => axios.delete(`/api/cv-maker/${id}`),
+};

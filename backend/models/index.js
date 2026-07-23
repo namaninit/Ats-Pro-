@@ -21,6 +21,7 @@ const Job      = require('./Job')(sequelize);
 const Interview= require('./Interview')(sequelize);
 const GmailToken = require('./GmailToken')(sequelize);
 const JobTemplate = require('./JobTemplate')(sequelize);
+const CvDocument = require('./CvDocument')(sequelize);
 
 
 // Company associations
@@ -57,4 +58,9 @@ JobTemplate.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
 User.hasMany(GmailToken, { foreignKey: 'userId', as: 'gmailTokens' });
 GmailToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
-module.exports = { sequelize, Company, User, Candidate, Client, Job, Interview , GmailToken, JobTemplate};
+Company.hasMany(CvDocument, { foreignKey: 'companyId', as: 'cvDocuments' });
+CvDocument.belongsTo(Company, { foreignKey: 'companyId', as: 'company' });
+User.hasMany(CvDocument, { foreignKey: 'userId', as: 'cvDocuments' });
+CvDocument.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+
+module.exports = { sequelize, Company, User, Candidate, Client, Job, Interview , GmailToken, JobTemplate, CvDocument};
